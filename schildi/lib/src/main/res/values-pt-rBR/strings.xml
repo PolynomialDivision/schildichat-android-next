@@ -204,4 +204,6 @@
     <string name="sc_pref_indicate_unread_count_underestimates_title">Indicar subestimações de contagem de não lidas</string>
     <string name="sc_pref_verbose_room_title_icons_summary">Mostrar ícones ao lado do título da sala quando o compartilhamento de histórico estiver ativo ou um contato for verificado</string>
     <string name="sc_pref_verbose_room_title_icons_title">Ícones detalhados do título da sala</string>
+    <string name="sc_theme_category_light">Claro</string>
+    <string name="sc_theme_category_dark">Escuro</string>
 </resources>
