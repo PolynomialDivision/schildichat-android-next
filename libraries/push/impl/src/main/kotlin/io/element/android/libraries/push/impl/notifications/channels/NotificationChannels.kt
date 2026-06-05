@@ -127,7 +127,7 @@ class DefaultNotificationChannels(
             // Now `SystemDefault` means Android's system tone, so untouched legacy state would
             // silently flip sound. Promote it to `ElementDefault` once, gated on version==0 so the
             // migration is idempotent.
-            if (initial.messageSoundVersion == 0 && initial.messageSound == NotificationSound.SystemDefault) {
+            if (/* SC: no */ false && initial.messageSoundVersion == 0 && initial.messageSound == NotificationSound.SystemDefault) {
                 appPreferencesStore.setMessageSoundAndIncrementVersion(NotificationSound.ElementDefault, title = null)
                 appPreferencesStore.getNotificationSoundChannelConfig()
             } else {
