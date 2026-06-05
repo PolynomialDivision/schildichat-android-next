@@ -4,13 +4,13 @@
     <string name="sc_onboarding_welcome_title">Vítejte v SchildiChatu</string>
     <string name="sc_onboarding_welcome_summary">Přináší želvy do Matrixu</string>
     <string name="sc_pref_tweaks_title">Želví vylepšení</string>
-    <string name="sc_pref_sc_themes_title">SC téma</string>
+    <string name="sc_pref_sc_themes_title">SC motiv</string>
     <string name="sc_pref_sc_overview_layout_title">SC rozložení přehledu</string>
     <string name="sc_pref_sc_layout_title">SC rozložení</string>
     <string name="sc_pref_sc_timeline_layout_title">SC rozložení konverzace</string>
     <string name="sc_pref_sc_floating_date_title">Plovoucí čas</string>
     <string name="sc_pref_sc_floating_date_summary">Zobrazit datum v horní části zpráv při posouvání</string>
-    <string name="sc_pref_pl_display_name_title">Pojmenování barev podle úrovně oprávnění</string>
+    <string name="sc_pref_pl_display_name_title">Barvy přezdívek se liší podle role</string>
     <string name="sc_pref_pl_display_name_summary_warning">Nefunguje spolehlivě, pokud seznam členů ještě nebyl plně načten</string>
     <string name="sc_pref_el_typography_title">Element typografie</string>
     <string name="sc_pref_el_typography_summary">Použít nastavení písma Elementu s větším textem zpráv</string>
@@ -145,7 +145,7 @@
     <string name="sc_pref_danger_zone_summary">Po zapnutí této funkce nenahlašovat chyby.</string>
     <string name="sc_pref_category_general">Obecné</string>
     <string name="sc_pref_sc_layout_summary">Zakažte, aby se dodržovalo rozložení Elementu.</string>
-    <string name="sc_pref_sc_themes_summary">Zakažte, aby se dodržovalo téma Elementu.</string>
+    <string name="sc_pref_sc_themes_summary">Zakažte, aby se dodržovalo motiv Elementu.</string>
     <string name="sc_url_previews_require_explicit_links_title_short">Vyžadovat explicitní odkazy</string>
     <string name="sc_url_previews_require_explicit_links_summary">Dotazujte se pouze na náhledy odkazů explicitně začínajících ttps://\\</string>
     <string name="sc_url_previews_require_explicit_links_title">Vyžadovat explicitní odkazy na náhledy</string>
@@ -194,4 +194,17 @@
     <string name="sc_pref_view_redactions_summary">Zobrazit zástupné symboly pro smazané zprávy namísto jejich úplného skrytí</string>
     <string name="sc_pref_legacy_message_rendering_title">Starší renderer zpráv</string>
     <string name="sc_pref_legacy_message_rendering_summary">Způsob, jakým Element vykresluje formátované zprávy</string>
+    <string name="sc_pref_el_theme_title">Element motiv</string>
+    <string name="sc_pref_el_theme_summary">Upřednostňovat barevný motiv z Element X</string>
+    <string name="sc_pref_black_theme_title">Černý motiv</string>
+    <string name="sc_pref_black_theme_summary">Černé pozadí při použití tmavého motivu</string>
+    <string name="sc_pref_indicate_unread_count_underestimates_title">Indikovat podhodnocený počet nepřečtených zpráv</string>
+    <string name="sc_pref_indicate_unread_count_underestimates_title_short">Nejistoty nepřečtených</string>
+    <string name="sc_pref_indicate_unread_count_underestimates_summary">Zobrazit otazníky a znaménka plus u neúplných výpočtů počtu nepřečtených položek</string>
+    <string name="sc_pref_inbox_bridge_avatars_title">Zobrazit avatary propojení</string>
+    <string name="sc_pref_inbox_bridge_avatars_summary">Vykreslit avatary pro propojené chaty</string>
+    <string name="sc_pref_verbose_room_title_icons_title">Podrobné ikony názvů místností</string>
+    <string name="sc_pref_verbose_room_title_icons_summary">Zobrazit ikony vedle názvu místnosti, pokud je povoleno sdílení historie nebo je kontakt ověřen</string>
+    <string name="sc_theme_category_light">Světlý</string>
+    <string name="sc_theme_category_dark">Tmavý</string>
 </resources>
