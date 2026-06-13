@@ -11,7 +11,9 @@ internal fun fixInlineImages(
 ) {
     val images = dom.getElementsByTag("img")
     images.forEach {
-        val fallback = it.attr("alt").takeIf(String::isNotBlank) ?: it.attr("title").takeIf(String::isNotBlank) ?: return@forEach
+        val fallback = it.attr("title").takeIf(String::isNotBlank)?.ensureEmoteColons()
+            ?: it.attr("alt").takeIf(String::isNotBlank)?.ensureEmoteColons("[", "]")
+            ?: return@forEach
         it.replaceWith(TextNode(fallback))
     }
 }
@@ -39,4 +41,16 @@ object ScHtmlToDomParser {
         .addAttributes("li", "value")
         .addAttributes("span", "data-mx-color", "color", "data-mx-bg-color", "data-mx-spoiler")
         .addAttributes("font", "data-mx-color", "color", "data-mx-bg-color", "data-mx-spoiler")
+}
+
+fun String.ensureEmoteColons(
+    prefix: String = ":",
+    suffix: String = ":",
+): String {
+    return when {
+        isEmpty() -> this
+        !endsWith(suffix) -> if (!startsWith(prefix)) "$prefix$this$suffix" else "$this$suffix"
+        !startsWith(prefix) -> "$prefix$this"
+        else -> this
+    }
 }
