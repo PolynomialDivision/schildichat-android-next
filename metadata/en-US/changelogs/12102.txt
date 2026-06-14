@@ -1,0 +1,4 @@
+- Update codebase to Element X v26.06.2
+- Handle matrix URIs in formatted messages
+- Bigger font for messages containing only custom emotes (same as for emoji-only messages)
+- Fix rendering inline image fallbacks in notifications, room list and replies
