@@ -61,4 +61,20 @@
     <string name="sc_pref_bury_low_priority_title">Zems svarīgums apakšā</string>
     <string name="sc_pref_client_side_sort_title">Klienta puses kārtošana</string>
     <string name="sc_pref_client_side_sort_title_short">Klienta kārtošana</string>
+    <string name="sc_pref_sc_themes_summary">Atspējot, lai izmantotu Element izskatu.</string>
+    <string name="sc_pref_el_theme_summary">Dot priekšroku Element X krāsu paletei</string>
+    <string name="sc_pref_black_theme_summary">Melns fons tumšajā izskatā</string>
+    <string name="sc_pref_sc_layout_summary">Atspējot, lai izmantotu Element izkārtojumu.</string>
+    <string name="sc_sync_read_receipt_and_marker_title_short">Voenādot izlasīšanas atzīmes</string>
+    <string name="sc_pref_mark_read_requires_seen_unread_line_title">Atzīmēt kā izlasītu tikai pēc pilnīgas izlasīšanas</string>
+    <string name="sc_pref_notify_failed_notification_lookup_summary">Paziņot, kad lietotne saņem pašpiegādes paziņojumu, bet neizdodas uzmeklēt saistīto ziņu</string>
+    <string name="sc_pseudo_space_favorites">Izlase</string>
+    <string name="sc_pseudo_space_dms">Tiešās tērzēšanas</string>
+    <string name="sc_pseudo_space_groups">Visas kopas</string>
+    <string name="sc_pseudo_space_spaceless">Tērzēšanas, kas nav pievienotas vietām</string>
+    <string name="sc_pseudo_space_spaceless_short">Bez vietas</string>
+    <string name="sc_pseudo_space_spaceless_groups">Kopu tērzēšanas, kas nav pievienotas vietām</string>
+    <string name="sc_pseudo_space_spaceless_groups_short">Kopas</string>
+    <string name="sc_pseudo_space_notifications_short">Paziņojumi</string>
+    <string name="sc_pseudo_space_notifications">Neizlasītās ziņas un pieminēšanas</string>
 </resources>
