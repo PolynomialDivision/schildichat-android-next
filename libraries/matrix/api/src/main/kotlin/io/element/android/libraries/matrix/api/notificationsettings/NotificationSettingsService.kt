@@ -22,7 +22,8 @@ interface NotificationSettingsService {
     suspend fun getRoomNotificationSettings(roomId: RoomId, isEncrypted: Boolean, isOneToOne: Boolean): Result<RoomNotificationSettings>
     suspend fun getDefaultRoomNotificationMode(isEncrypted: Boolean, isOneToOne: Boolean): Result<RoomNotificationMode>
     suspend fun setDefaultRoomNotificationMode(isEncrypted: Boolean, mode: RoomNotificationMode, isDM: Boolean): Result<Unit>
-    suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode): Result<Unit>
+    suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit>
+    suspend fun reconcileRoomEncryptedWakeupFallback(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit>
     suspend fun restoreDefaultRoomNotificationMode(roomId: RoomId): Result<Unit>
     suspend fun muteRoom(roomId: RoomId): Result<Unit>
     suspend fun unmuteRoom(roomId: RoomId, isEncrypted: Boolean, isOneToOne: Boolean): Result<Unit>

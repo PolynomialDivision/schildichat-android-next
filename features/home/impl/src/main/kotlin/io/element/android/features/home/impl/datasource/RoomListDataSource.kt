@@ -10,6 +10,7 @@ package io.element.android.features.home.impl.datasource
 
 import chat.schildi.features.home.ScInboxSettingsHandler
 import chat.schildi.lib.preferences.ScPreferencesStore
+import chat.schildi.lib.preferences.ScPrefs
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import io.element.android.features.home.impl.model.RoomListRoomSummary
@@ -21,6 +22,7 @@ import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.di.annotations.SessionCoroutineScope
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
+import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomListFilter
 import io.element.android.libraries.matrix.api.roomlist.RoomListService
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -59,7 +62,7 @@ class RoomListDataSource(
     private val roomListRoomSummaryFactory: RoomListRoomSummaryFactory,
     private val coroutineDispatchers: CoroutineDispatchers,
     private val notificationSettingsService: NotificationSettingsService,
-    scPreferencesStore: ScPreferencesStore,
+    private val scPreferencesStore: ScPreferencesStore,
     @SessionCoroutineScope
     private val sessionCoroutineScope: CoroutineScope,
     private val dateTimeObserver: DateTimeObserver,
@@ -67,6 +70,7 @@ class RoomListDataSource(
 ) {
     init {
         observeNotificationSettings()
+        observeEncryptedMentionWakeupFallbackSetting()
         observeDateTimeChanges()
     }
 
@@ -90,11 +94,17 @@ class RoomListDataSource(
 
     val loadingState = roomList.loadingState
 
+    private var latestRoomSummaries: List<RoomSummary> = emptyList()
+    private var latestWakeupReconcileState: List<EncryptedMentionWakeupRoomState>? = null
+    private var currentWakeupReconcileJob: Job? = null
+
     fun launchIn(coroutineScope: CoroutineScope): Job {
         scInboxSettingsHandler.launchIn(coroutineScope, scInboxFilterFlow)
         return roomList
             .summaries
             .onEach { roomSummaries ->
+                latestRoomSummaries = roomSummaries
+                reconcileEncryptedMentionWakeupFallback(roomSummaries)
                 replaceWith(roomSummaries)
             }
             .launchIn(coroutineScope)
@@ -139,8 +149,61 @@ class RoomListDataSource(
             .debounce(0.5.seconds)
             .onEach {
                 roomList.rebuildSummaries()
+                reconcileEncryptedMentionWakeupFallback(latestRoomSummaries, force = true)
             }
             .launchIn(sessionCoroutineScope)
+    }
+
+    private fun observeEncryptedMentionWakeupFallbackSetting() {
+        scPreferencesStore.settingFlow(ScPrefs.ENCRYPTED_MENTION_WAKEUP_FALLBACK)
+            .distinctUntilChanged()
+            .onEach {
+                reconcileEncryptedMentionWakeupFallback(latestRoomSummaries, force = true)
+            }
+            .launchIn(sessionCoroutineScope)
+    }
+
+    private fun reconcileEncryptedMentionWakeupFallback(
+        roomSummaries: List<RoomSummary>,
+        force: Boolean = false,
+    ) {
+        val reconcileState = roomSummaries.map { roomSummary ->
+            EncryptedMentionWakeupRoomState(
+                roomId = roomSummary.roomId,
+                isEncrypted = roomSummary.info.isEncrypted == true,
+                isDm = roomSummary.isDm,
+                userDefinedNotificationMode = roomSummary.info.userDefinedNotificationMode,
+            )
+        }
+        if (!force && reconcileState == latestWakeupReconcileState) {
+            return
+        }
+        latestWakeupReconcileState = reconcileState
+
+        currentWakeupReconcileJob?.cancel()
+        currentWakeupReconcileJob = sessionCoroutineScope.launch {
+            val encryptedGroupDefaultMode = notificationSettingsService.getDefaultRoomNotificationMode(
+                isEncrypted = true,
+                isOneToOne = false,
+            ).getOrNull() ?: return@launch
+            val encryptedDmDefaultMode = notificationSettingsService.getDefaultRoomNotificationMode(
+                isEncrypted = true,
+                isOneToOne = true,
+            ).getOrNull() ?: return@launch
+
+            reconcileState.forEach { roomState ->
+                val effectiveMode = roomState.userDefinedNotificationMode ?: if (roomState.isDm) {
+                    encryptedDmDefaultMode
+                } else {
+                    encryptedGroupDefaultMode
+                }
+                notificationSettingsService.reconcileRoomEncryptedWakeupFallback(
+                    roomId = roomState.roomId,
+                    mode = effectiveMode,
+                    isEncrypted = roomState.isEncrypted,
+                )
+            }
+        }
     }
 
     private fun observeDateTimeChanges() {
@@ -226,4 +289,11 @@ class RoomListDataSource(
             }
         }
     }
+
+    private data class EncryptedMentionWakeupRoomState(
+        val roomId: RoomId,
+        val isEncrypted: Boolean,
+        val isDm: Boolean,
+        val userDefinedNotificationMode: RoomNotificationMode?,
+    )
 }
