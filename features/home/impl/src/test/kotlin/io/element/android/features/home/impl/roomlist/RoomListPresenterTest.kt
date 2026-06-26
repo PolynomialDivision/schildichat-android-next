@@ -373,7 +373,7 @@ class RoomListPresenterTest {
         )
         val presenter = createRoomListPresenter(client = matrixClient)
         presenter.test {
-            notificationSettingsService.setRoomNotificationMode(A_ROOM_ID, userDefinedMode)
+            notificationSettingsService.setRoomNotificationMode(A_ROOM_ID, userDefinedMode, isEncrypted = true)
             val updatedState = consumeItemsUntilPredicate { state ->
                 (state.contentState as? RoomListContentState.Rooms)?.summaries.orEmpty().any { summary ->
                     summary.id == A_ROOM_ID.value && summary.userDefinedNotificationMode == userDefinedMode

@@ -32,6 +32,7 @@ object ScPrefs {
     // General behavior
     val FAST_TRANSITIONS = ScBoolPref("FAST_TRANSITIONS", true, R.string.sc_pref_fast_transitions_title, R.string.sc_pref_fast_transitions_summary, upstreamChoice = false)
     val NOTIFICATION_ONLY_ALERT_ONCE = ScBoolPref("NOTIFICATION_ONLY_ALERT_ONCE", false, R.string.sc_pref_notification_only_alert_once_title, R.string.sc_pref_notification_only_alert_once_summary, upstreamChoice = false)
+    val ENCRYPTED_MENTION_WAKEUP_FALLBACK = ScBoolPref("ENCRYPTED_MENTION_WAKEUP_FALLBACK", false, R.string.sc_pref_encrypted_mention_wakeup_fallback_title, R.string.sc_pref_encrypted_mention_wakeup_fallback_summary, authorsChoice = false)
     val SHOW_SYNCING_INDICATOR = ScBoolPref("SHOW_SYNCING_INDICATOR", true, R.string.sc_pref_syncing_indicator_title, R.string.sc_pref_syncing_indicator_summary, upstreamChoice = true, authorsChoice = true)
     val DEBOUNCE_OFFLINE_STATE = ScBoolPref("DEBOUNCE_OFFLINE_STATE", true, R.string.sc_pref_debounce_offline_state_title, R.string.sc_pref_debounce_offline_state_summary, authorsChoice = null, upstreamChoice = false)
 
@@ -237,6 +238,7 @@ object ScPrefs {
         )),
         ScPrefScreen(R.string.sc_pref_category_notifications, null, listOf(
             NOTIFICATION_ONLY_ALERT_ONCE,
+            ENCRYPTED_MENTION_WAKEUP_FALLBACK,
         )),
         ScPrefScreen(R.string.sc_pref_screen_experimental_title, R.string.sc_pref_screen_experimental_summary, listOf(
             ScPrefCategory(R.string.sc_pref_category_unread_counts, null, listOf(
