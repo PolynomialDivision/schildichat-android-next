@@ -353,12 +353,13 @@ class RoomNotificationSettingsPresenter(
         suspendWithMinimumDuration {
             pendingModeState.value = mode
             pendingDefaultState.value = false
-            val result = notificationSettingsService.setRoomNotificationMode(room.roomId, mode)
-            if (result.isFailure) {
-                pendingModeState.value = null
-                pendingDefaultState.value = null
-            }
-            result.getOrThrow()
+            val isEncrypted = room.info().isEncrypted ?: room.getUpdatedIsEncrypted().getOrThrow()
+            notificationSettingsService.setRoomNotificationMode(room.roomId, mode, isEncrypted)
+                .onFailure {
+                    pendingModeState.value = null
+                    pendingDefaultState.value = null
+                }
+                .getOrThrow()
         }.runCatchingUpdatingState(action)
     }
 

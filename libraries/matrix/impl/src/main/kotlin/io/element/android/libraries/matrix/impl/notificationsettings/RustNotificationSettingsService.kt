@@ -8,6 +8,8 @@
 
 package io.element.android.libraries.matrix.impl.notificationsettings
 
+import chat.schildi.lib.preferences.ScPreferencesStore
+import chat.schildi.lib.preferences.ScPrefs
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.coroutine.suspendLazy
 import io.element.android.libraries.core.extensions.runCatchingExceptions
@@ -30,6 +32,7 @@ class RustNotificationSettingsService(
     client: Client,
     sessionCoroutineScope: CoroutineScope,
     private val dispatchers: CoroutineDispatchers,
+    private val scPreferencesStore: ScPreferencesStore,
 ) : NotificationSettingsService {
     private val notificationSettings by suspendLazy(sessionCoroutineScope.coroutineContext + dispatchers.io) { client.getNotificationSettings() }
     private val _notificationSettingsChangeFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -75,10 +78,31 @@ class RustNotificationSettingsService(
         }
     }
 
-    override suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode): Result<Unit> = withContext(dispatchers.io) {
+    override suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit> = withContext(dispatchers.io) {
         runCatchingExceptions {
-            notificationSettings.await().setRoomNotificationMode(roomId.value, mode.let(RoomNotificationSettingsMapper::mapMode))
+            notificationSettings.await().setRoomNotificationModeWithEncryptedWakeupFallback(
+                roomId = roomId.value,
+                mode = mode.let(RoomNotificationSettingsMapper::mapMode),
+                isEncrypted = isEncrypted,
+                encryptedWakeupFallbackEnabled = encryptedWakeupFallbackEnabled(),
+            )
         }
+    }
+
+    override suspend fun reconcileRoomEncryptedWakeupFallback(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit> = withContext(dispatchers.io) {
+        runCatchingExceptions {
+            notificationSettings.await().reconcileRoomEncryptedWakeupFallback(
+                roomId = roomId.value,
+                effectiveMode = mode.let(RoomNotificationSettingsMapper::mapMode),
+                isEncrypted = isEncrypted,
+                encryptedWakeupFallbackEnabled = encryptedWakeupFallbackEnabled(),
+            )
+        }
+    }
+
+    private suspend fun encryptedWakeupFallbackEnabled(): Boolean {
+        return scPreferencesStore.getSetting(ScPrefs.ENCRYPTED_MENTION_WAKEUP_FALLBACK) &&
+            !notificationSettings.await().canPushEncryptedEventToDevice()
     }
 
     override suspend fun restoreDefaultRoomNotificationMode(roomId: RoomId): Result<Unit> = withContext(dispatchers.io) {
@@ -87,7 +111,7 @@ class RustNotificationSettingsService(
         }
     }
 
-    override suspend fun muteRoom(roomId: RoomId): Result<Unit> = setRoomNotificationMode(roomId, RoomNotificationMode.MUTE)
+    override suspend fun muteRoom(roomId: RoomId): Result<Unit> = setRoomNotificationMode(roomId, RoomNotificationMode.MUTE, isEncrypted = false)
 
     override suspend fun unmuteRoom(roomId: RoomId, isEncrypted: Boolean, isOneToOne: Boolean) = withContext(dispatchers.io) {
         runCatchingExceptions {

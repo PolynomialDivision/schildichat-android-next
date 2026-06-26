@@ -181,7 +181,7 @@ class RustMatrixClient(
     private val notificationProcessSetup = NotificationProcessSetup.SingleProcess(innerSyncService)
     private val innerNotificationClient = runBlocking { innerClient.notificationClient(notificationProcessSetup) }
     override val notificationService = RustNotificationService(sessionId, innerNotificationClient, dispatchers, clock)
-    override val notificationSettingsService = RustNotificationSettingsService(innerClient, sessionCoroutineScope, dispatchers)
+    override val notificationSettingsService = RustNotificationSettingsService(innerClient, sessionCoroutineScope, dispatchers, scPreferencesStore)
     override val encryptionService = RustEncryptionService(
         client = innerClient,
         syncService = syncService,

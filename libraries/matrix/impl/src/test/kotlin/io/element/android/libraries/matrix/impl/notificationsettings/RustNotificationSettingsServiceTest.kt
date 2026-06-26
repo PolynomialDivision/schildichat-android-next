@@ -8,6 +8,7 @@
 
 package io.element.android.libraries.matrix.impl.notificationsettings
 
+import chat.schildi.lib.preferences.PreviewScPreferencesStore
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
@@ -40,5 +41,6 @@ class RustNotificationSettingsServiceTest {
         ),
         sessionCoroutineScope = this,
         dispatchers = testCoroutineDispatchers(),
+        scPreferencesStore = PreviewScPreferencesStore,
     )
 }

@@ -453,7 +453,8 @@ class RoomDetailsPresenterTest {
         presenter.testWithLifecycleOwner(lifecycleOwner = fakeLifecycleOwner) {
             notificationSettingsService.setRoomNotificationMode(
                 room.roomId,
-                RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY
+                RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY,
+                isEncrypted = true,
             )
             val updatedState = consumeItemsUntilPredicate {
                 it.roomNotificationSettings?.mode == RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY

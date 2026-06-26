@@ -62,7 +62,7 @@ class RoomNotificationSettingsPresenterTest {
         val notificationSettingsService = FakeNotificationSettingsService()
         val presenter = createRoomNotificationSettingsPresenter(notificationSettingsService)
         presenter.test {
-            notificationSettingsService.setRoomNotificationMode(A_ROOM_ID, RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY)
+            notificationSettingsService.setRoomNotificationMode(A_ROOM_ID, RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY, isEncrypted = true)
             val updatedState = consumeItemsUntilPredicate {
                 it.roomNotificationSettings.dataOrNull()?.mode == RoomNotificationMode.MENTIONS_AND_KEYWORDS_ONLY
             }.last()

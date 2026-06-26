@@ -92,7 +92,7 @@ class FakeNotificationSettingsService(
         return Result.success(Unit)
     }
 
-    override suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode): Result<Unit> {
+    override suspend fun setRoomNotificationMode(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit> {
         val error = setNotificationModeError
         return if (error != null) {
             Result.failure(error)
@@ -102,6 +102,10 @@ class FakeNotificationSettingsService(
             notificationSettingsStateFlow.emit(Unit)
             Result.success(Unit)
         }
+    }
+
+    override suspend fun reconcileRoomEncryptedWakeupFallback(roomId: RoomId, mode: RoomNotificationMode, isEncrypted: Boolean): Result<Unit> {
+        return Result.success(Unit)
     }
 
     override suspend fun restoreDefaultRoomNotificationMode(roomId: RoomId): Result<Unit> {
@@ -116,7 +120,7 @@ class FakeNotificationSettingsService(
     }
 
     override suspend fun muteRoom(roomId: RoomId): Result<Unit> {
-        return setRoomNotificationMode(roomId, RoomNotificationMode.MUTE)
+        return setRoomNotificationMode(roomId, RoomNotificationMode.MUTE, isEncrypted = false)
     }
 
     override suspend fun unmuteRoom(roomId: RoomId, isEncrypted: Boolean, isOneToOne: Boolean): Result<Unit> {
@@ -185,4 +189,5 @@ class FakeNotificationSettingsService(
     override suspend fun getRawPushRules(): Result<String?> {
         return getRawPushRulesResult()
     }
+
 }
