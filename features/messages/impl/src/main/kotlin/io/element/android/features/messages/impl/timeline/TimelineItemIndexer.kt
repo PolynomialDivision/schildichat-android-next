@@ -55,6 +55,11 @@ class TimelineItemIndexer {
                         processEvent(event, index)
                     }
                 }
+                is TimelineItem.MediaGroup -> {
+                    timelineItem.events.forEach { event ->
+                        processEvent(event, index)
+                    }
+                }
                 else -> Unit
             }
         }

@@ -137,4 +137,12 @@ enum class FeatureFlags(
         defaultValue = { false },
         isFinished = false,
     ),
+    MediaGrouping(
+        key = "feature.media_grouping",
+        title = "Media grouping",
+        description = "Group consecutive image/video messages from the same sender sent close together into a single album in the timeline.",
+        defaultValue = { false },
+        isFinished = false,
+        isInLabs = true,
+    ),
 }
