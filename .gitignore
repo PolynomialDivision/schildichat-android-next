@@ -120,3 +120,4 @@ lint/tmp/
 
 checkouts/**
 deploy-fdroid.sh
+rebase-on-schildichat.sh
