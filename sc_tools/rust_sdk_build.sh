@@ -16,8 +16,22 @@ if [ ! -d "$COMPONENTS_DIR" ]; then
 fi
 
 if [ -z "$JAVA_HOME" ]; then
-    JAVA_HOME=/opt/android-studio/jbr
-    if [ -d "$JAVA_HOME" ]; then
+    # Gradle/AGP need a JDK in their supported range; the system default JDK
+    # (e.g. via `java`/`archlinux-java`) may be too new. Prefer Android
+    # Studio's bundled JBR if present, else fall back to a known-good JDK.
+    for candidate in \
+        /opt/android-studio/jbr \
+        "$HOME/android-studio/jbr" \
+        /usr/share/android-studio/jbr \
+        /usr/lib/jvm/java-21-openjdk \
+        /usr/lib/jvm/java-17-openjdk \
+        ; do
+        if [ -d "$candidate" ]; then
+            JAVA_HOME="$candidate"
+            break
+        fi
+    done
+    if [ -n "${JAVA_HOME:-}" ]; then
         export JAVA_HOME
     else
         unset JAVA_HOME
@@ -25,9 +39,18 @@ if [ -z "$JAVA_HOME" ]; then
     fi
 fi
 if [ -z "$ANDROID_NDK_HOME" ]; then
-    ANDROID_NDK_HOME="$HOME/AndroidSdk/ndk/29.0.14206865"
-    if [ -d "$ANDROID_NDK_HOME" ]; then
-        export ANDROID_NDK_HOME="$ANDROID_NDK_HOME"
+    SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+    # Pick the newest installed NDK that actually has a valid source.properties,
+    # skipping incomplete/broken installs (e.g. an interrupted SDK Manager download).
+    for candidate in $(ls -d "$SDK_ROOT"/ndk/*/ 2>/dev/null | sort -rV); do
+        candidate="${candidate%/}"
+        if [ -f "$candidate/source.properties" ]; then
+            ANDROID_NDK_HOME="$candidate"
+            break
+        fi
+    done
+    if [ -n "${ANDROID_NDK_HOME:-}" ]; then
+        export ANDROID_NDK_HOME
     else
         unset ANDROID_NDK_HOME
         echo "Warn: ANDROID_NDK_HOME not set"
