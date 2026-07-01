@@ -306,7 +306,7 @@ class NotificationSettingsViewTest {
         )
         // The click now opens the in-app preset dialog instead of launching the system picker
         // directly; the picker only fires from the dialog's "Choose another sound..." option
-        // (covered by Presenter tests + NotificationSoundPickerTest).
+        // (covered by Presenter tests + RingtonePickerTest).
         onNodeWithText("Message sound").performClick()
         eventsRecorder.assertList(
             listOf(

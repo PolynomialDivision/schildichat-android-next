@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.preferences.impl.notifications
+package io.element.android.libraries.push.api.notifications.sound
 
 import android.content.Intent
 import android.media.RingtoneManager
@@ -18,7 +18,7 @@ import io.element.android.libraries.preferences.api.store.NotificationSound
  * Builds an `ACTION_RINGTONE_PICKER` intent for [type] (notification or ringtone), pre-selecting
  * the user's [current] choice and showing the system [defaultUri] as the "Default" option.
  */
-internal fun buildRingtonePickerIntent(
+fun buildRingtonePickerIntent(
     type: Int,
     current: NotificationSound,
     defaultUri: Uri,
@@ -45,7 +45,7 @@ internal fun buildRingtonePickerIntent(
  *  - URI matching [defaultUri] → the user picked "Default",
  *  - any other URI → the user picked a specific ringtone.
  */
-internal fun Intent.toPickedNotificationSound(defaultUri: Uri): NotificationSound {
+fun Intent.toPickedNotificationSound(defaultUri: Uri): NotificationSound {
     val pickedUri: Uri? = IntentCompat.getParcelableExtra(this, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
     return when {
         pickedUri == null -> NotificationSound.Silent

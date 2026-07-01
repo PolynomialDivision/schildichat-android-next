@@ -57,6 +57,8 @@ import io.element.android.libraries.designsystem.utils.OnLifecycleEvent
 import io.element.android.libraries.fullscreenintent.api.FullScreenIntentPermissionsEvents
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.preferences.api.store.NotificationSound
+import io.element.android.libraries.push.api.notifications.sound.buildRingtonePickerIntent
+import io.element.android.libraries.push.api.notifications.sound.toPickedNotificationSound
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
