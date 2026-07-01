@@ -50,6 +50,7 @@ fun BoxScope.FloatingDateHeader(
                     when (item) {
                         is TimelineItem.Event -> item.sentDate
                         is TimelineItem.GroupedEvents -> item.events.firstOrNull()?.sentDate
+                        is TimelineItem.MediaGroup -> item.events.firstOrNull()?.sentDate
                         //is TimelineItem.Virtual -> (item.model as? TimelineItemDaySeparatorModel)?.formattedDate
                         else -> null
                     }

@@ -91,7 +91,12 @@ internal fun TimelineItemRow(
         },
 ) {
     val backgroundModifier = if (timelineItem.isEvent(focusedEventId)) {
-        val focusedEventOffset = if ((timelineItem as? TimelineItem.Event)?.showSenderInformation == true) {
+        val showsSenderInformation = when (timelineItem) {
+            is TimelineItem.Event -> timelineItem.showSenderInformation
+            is TimelineItem.MediaGroup -> timelineItem.events.first().showSenderInformation
+            else -> false
+        }
+        val focusedEventOffset = if (showsSenderInformation) {
             14.dp
         } else {
             2.dp
@@ -207,6 +212,17 @@ internal fun TimelineItemRow(
                     onMoreReactionsClick = onMoreReactionsClick,
                     onReadReceiptClick = onReadReceiptClick,
                     eventSink = eventSink,
+                )
+            }
+            is TimelineItem.MediaGroup -> {
+                TimelineItemMediaGroupRow(
+                    timelineItem = timelineItem,
+                    timelineRoomInfo = timelineRoomInfo,
+                    isLastOutgoingMessage = isLastOutgoingMessage,
+                    onUserDataClick = onUserDataClick,
+                    onTileClick = onContentClick,
+                    onTileLongClick = onLongClick,
+                    onReadReceiptClick = onReadReceiptClick,
                 )
             }
         }

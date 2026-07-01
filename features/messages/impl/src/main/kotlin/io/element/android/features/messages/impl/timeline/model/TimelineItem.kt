@@ -44,12 +44,14 @@ sealed interface TimelineItem {
         is Event -> id
         is Virtual -> id
         is GroupedEvents -> id
+        is MediaGroup -> id
     }
 
     fun isEvent(eventId: EventId?): Boolean {
         if (eventId == null) return false
         return when (this) {
             is Event -> this.eventId == eventId
+            is MediaGroup -> events.any { it.eventId == eventId }
             else -> false
         }
     }
@@ -58,12 +60,14 @@ sealed interface TimelineItem {
         is Event -> content.type
         is Virtual -> model.type
         is GroupedEvents -> "groupedEvent"
+        is MediaGroup -> "mediaGroup"
     }
 
     fun formattedDate(): String? = when (this) {
         is Event -> sentDate.takeIf { it.isNotEmpty() }
         is Virtual -> (model as? TimelineItemDaySeparatorModel)?.formattedDate?.takeIf { it.isNotEmpty() }
         is GroupedEvents -> null
+        is MediaGroup -> events.firstOrNull()?.sentDate?.takeIf { it.isNotEmpty() }
     }
 
     data class Virtual(
@@ -145,6 +149,19 @@ sealed interface TimelineItem {
         val id: UniqueId,
         val events: ImmutableList<Event>,
         val aggregatedReadReceipts: ImmutableList<ReadReceiptData>,
+    ) : TimelineItem
+
+    /**
+     * A purely visual grouping of 2 or more consecutive image/video [Event]s from the same sender,
+     * rendered as a single media album/collage. This does not change how the underlying Matrix
+     * events are represented or addressed: every [Event] in [events] keeps its own [Event.eventId],
+     * [Event.reactionsState], etc., and remains individually repliable/reactable/forwardable.
+     *
+     * See [io.element.android.features.messages.impl.timeline.groups.TimelineItemMediaGrouper].
+     */
+    data class MediaGroup(
+        val id: UniqueId,
+        val events: ImmutableList<Event>,
     ) : TimelineItem
 }
 

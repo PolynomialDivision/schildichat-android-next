@@ -562,7 +562,7 @@ private fun TimelineItemEventRowContent(
 }
 
 @Composable
-private fun MessageSenderInformation(
+internal fun MessageSenderInformation(
     senderId: UserId,
     senderProfile: ProfileDetails,
     senderAvatar: AvatarData,

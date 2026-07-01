@@ -75,6 +75,11 @@ private fun getLastEventIdBeforeOrAt(index: Int, items: ImmutableList<TimelineIt
                     return it
                 }
             }
+            is TimelineItem.MediaGroup -> item.events.reversed().forEach { event ->
+                event.eventId?.let {
+                    return it
+                }
+            }
             else -> {}
         }
     }
