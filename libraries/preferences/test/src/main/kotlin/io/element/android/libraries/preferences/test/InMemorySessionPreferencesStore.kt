@@ -8,10 +8,16 @@
 
 package io.element.android.libraries.preferences.test
 
+import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.preferences.api.store.NotificationSound
+import io.element.android.libraries.preferences.api.store.RoomNotificationChannelSettings
+import io.element.android.libraries.preferences.api.store.RoomNotificationPriority
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.preferences.api.store.VideoCompressionPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class InMemorySessionPreferencesStore(
     isSharePresenceEnabled: Boolean = true,
@@ -31,8 +37,11 @@ class InMemorySessionPreferencesStore(
     private val isSessionVerificationSkipped = MutableStateFlow(isSessionVerificationSkipped)
     private val doesCompressMedia = MutableStateFlow(doesCompressMedia)
     private val videoCompressionPreset = MutableStateFlow(videoCompressionPreset)
+    private val roomNotificationChannelSettings = mutableMapOf<RoomId, MutableStateFlow<RoomNotificationChannelSettings?>>()
     var clearCallCount = 0
         private set
+
+    private fun slotFor(roomId: RoomId) = roomNotificationChannelSettings.getOrPut(roomId) { MutableStateFlow(null) }
 
     override suspend fun setSharePresence(enabled: Boolean) {
         isSharePresenceEnabled.tryEmit(enabled)
@@ -83,6 +92,47 @@ class InMemorySessionPreferencesStore(
     override fun getVideoCompressionPreset(): Flow<VideoCompressionPreset> {
         return videoCompressionPreset
     }
+
+    override fun getRoomNotificationChannelSettingsFlow(roomId: RoomId): Flow<RoomNotificationChannelSettings?> = slotFor(roomId)
+
+    override suspend fun getRoomNotificationChannelSettings(roomId: RoomId): RoomNotificationChannelSettings? = slotFor(roomId).first()
+
+    override suspend fun setRoomNotificationSoundAndIncrementVersion(roomId: RoomId, sound: NotificationSound, title: String?): Int {
+        val slot = slotFor(roomId)
+        val newVersion = (slot.value?.channelVersion ?: 0) + 1
+        slot.value = (slot.value ?: defaultRoomNotificationChannelSettings()).copy(
+            sound = sound,
+            soundDisplayName = title.takeIf { sound is NotificationSound.Custom },
+            channelVersion = newVersion,
+        )
+        return newVersion
+    }
+
+    override suspend fun setRoomNotificationPriority(roomId: RoomId, priority: RoomNotificationPriority): Int {
+        val slot = slotFor(roomId)
+        val newVersion = (slot.value?.channelVersion ?: 0) + 1
+        slot.value = (slot.value ?: defaultRoomNotificationChannelSettings()).copy(priority = priority, channelVersion = newVersion)
+        return newVersion
+    }
+
+    override suspend fun setRoomMessagePreviewEnabled(roomId: RoomId, enabled: Boolean) {
+        val slot = slotFor(roomId)
+        slot.value = (slot.value ?: defaultRoomNotificationChannelSettings()).copy(showMessagePreview = enabled)
+    }
+
+    override suspend fun clearRoomNotificationChannelSettings(roomId: RoomId) {
+        slotFor(roomId).value = null
+    }
+
+    override fun hasCustomRoomNotificationChannelSettings(roomId: RoomId): Flow<Boolean> = slotFor(roomId).map { it != null }
+
+    private fun defaultRoomNotificationChannelSettings() = RoomNotificationChannelSettings(
+        sound = NotificationSound.SystemDefault,
+        soundDisplayName = null,
+        channelVersion = 0,
+        priority = RoomNotificationPriority.DEFAULT,
+        showMessagePreview = true,
+    )
 
     override suspend fun clear() {
         clearCallCount++
