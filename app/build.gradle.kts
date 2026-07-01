@@ -96,6 +96,15 @@ android {
             storePassword = System.getenv("ELEMENT_ANDROID_NIGHTLY_STOREPASSWORD")
                 ?: project.property("signing.element.nightly.storePassword") as? String?
         }
+        // Personal release key, configured via ~/.gradle/gradle.properties (never committed).
+        // Falls back to the shared debug keystore below when those properties aren't set, so
+        // other contributors/CI are unaffected.
+        register("schildichatRelease") {
+            keyAlias = project.findProperty("signing.schildichat.release.keyId") as String?
+            keyPassword = project.findProperty("signing.schildichat.release.keyPassword") as String?
+            storeFile = (project.findProperty("signing.schildichat.release.storeFile") as String?)?.let { file(it) }
+            storePassword = project.findProperty("signing.schildichat.release.storePassword") as String?
+        }
     }
 
     val baseAppName = BuildTimeConfig.APPLICATION_NAME
@@ -122,7 +131,11 @@ android {
                 "login_redirect_scheme_upstream", // SC: we have non-_upstream it in resources to better combine build flavor+type
                 oAuthRedirectSchemeBase,
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (project.hasProperty("signing.schildichat.release.keyId")) {
+                signingConfigs.getByName("schildichatRelease")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             optimization {
                 enable = true

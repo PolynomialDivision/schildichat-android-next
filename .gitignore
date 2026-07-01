@@ -119,3 +119,4 @@ lint/tmp/
 .DS_Store
 
 checkouts/**
+deploy-fdroid.sh
