@@ -17,6 +17,7 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.libraries.androidutils.hash.hash
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.push.api.notifications.sound.NotificationSoundCopier
@@ -31,6 +32,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 
 private const val MAX_BYTES = 5L * 1024 * 1024
 private const val DIRECTORY_NAME = "notification_sounds"
@@ -52,10 +54,13 @@ class DefaultNotificationSoundCopier(
     @ApplicationContext private val context: Context,
 ) : NotificationSoundCopier {
     // Per-slot serialization: concurrent picks for the same slot would race on `<slot>.tmp`.
-    private val slotMutexes = SoundSlot.entries.associateWith { Mutex() }
+    // Room slots aren't enumerable up front (one per customized room), so populate lazily.
+    private val slotMutexes = ConcurrentHashMap<SoundSlot, Mutex>()
+
+    private fun mutexFor(slot: SoundSlot): Mutex = slotMutexes.computeIfAbsent(slot) { Mutex() }
 
     override suspend fun copyToAppFiles(sourceUriString: String, slot: SoundSlot): CopyResult = withContext(Dispatchers.IO) {
-        slotMutexes.getValue(slot).withLock {
+        mutexFor(slot).withLock {
             runCatchingExceptions { performCopy(sourceUriString, slot) }
                 .getOrElse { ex ->
                     // Don't pass the throwable to Timber: SAF/MediaProvider exceptions sometimes
@@ -68,7 +73,7 @@ class DefaultNotificationSoundCopier(
 
     override suspend fun deleteStoredSoundFor(slot: SoundSlot) {
         withContext(Dispatchers.IO) {
-            slotMutexes.getValue(slot).withLock {
+            mutexFor(slot).withLock {
                 val dir = File(context.filesDir, DIRECTORY_NAME)
                 if (!dir.exists()) return@withLock
                 val slotBase = slotBaseFor(slot)
@@ -85,6 +90,7 @@ class DefaultNotificationSoundCopier(
     private fun slotBaseFor(slot: SoundSlot): String = when (slot) {
         SoundSlot.Message -> "message_sound"
         SoundSlot.Call -> "call_sound"
+        is SoundSlot.Room -> "room_sound_${slot.roomId.value.hash().take(16)}"
     }
 
     private fun performCopy(sourceUriString: String, slot: SoundSlot): CopyResult {

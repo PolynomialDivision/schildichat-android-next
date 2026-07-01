@@ -7,6 +7,8 @@
 
 package io.element.android.libraries.push.api.notifications.sound
 
+import io.element.android.libraries.matrix.api.core.RoomId
+
 /**
  * Copies a picked notification sound into app-private storage and re-exposes it via the app's
  * FileProvider, so the persisted reference outlives the original source.
@@ -22,7 +24,12 @@ interface NotificationSoundCopier {
      */
     suspend fun deleteStoredSoundFor(slot: SoundSlot)
 
-    enum class SoundSlot { Message, Call }
+    /** [Room] slots are not enumerable up front (one per customized room), unlike [Message]/[Call]. */
+    sealed interface SoundSlot {
+        data object Message : SoundSlot
+        data object Call : SoundSlot
+        data class Room(val roomId: RoomId) : SoundSlot
+    }
 
     sealed interface CopyResult {
         /**

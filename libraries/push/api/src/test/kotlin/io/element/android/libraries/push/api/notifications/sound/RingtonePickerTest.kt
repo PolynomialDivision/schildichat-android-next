@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.preferences.impl.notifications
+package io.element.android.libraries.push.api.notifications.sound
 
 import android.content.Intent
 import android.media.RingtoneManager
@@ -17,7 +17,7 @@ import io.element.android.libraries.preferences.api.store.NotificationSound
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import org.junit.Test
 
-class NotificationSoundPickerTest : RobolectricTest() {
+class RingtonePickerTest : RobolectricTest() {
     @Test
     fun `buildRingtonePickerIntent encodes SystemDefault as the system default URI`() {
         val intent = buildRingtonePickerIntent(
