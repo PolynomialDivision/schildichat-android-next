@@ -24,6 +24,7 @@ import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
 import io.element.android.libraries.matrix.ui.media.test.FakeImageLoaderHolder
 import io.element.android.libraries.push.impl.notifications.factories.FakeIntentProvider
 import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
+import io.element.android.libraries.push.test.notifications.channels.FakeRoomNotificationChannelManager
 import io.element.android.libraries.push.test.notifications.push.FakeNotificationBitmapLoader
 import io.element.android.libraries.sessionstorage.test.observer.FakeSessionObserver
 import io.element.android.tests.testutils.robolectric.RobolectricTest
@@ -172,10 +173,59 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         assertThat(shortcuts.first().id).startsWith(A_SESSION_ID_2.value)
     }
 
+    @Test
+    fun `onLeftRoom clears the room's notification channel`() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        var clearedRoom: Pair<Any, Any>? = null
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            clearRoomChannelLambda = { sessionId, roomId -> clearedRoom = sessionId to roomId },
+        )
+        val service = createService(context, roomNotificationChannelManager = roomNotificationChannelManager)
+
+        service.onLeftRoom(sessionId = A_SESSION_ID, roomId = A_ROOM_ID)
+
+        assertThat(clearedRoom).isEqualTo(A_SESSION_ID to A_ROOM_ID)
+    }
+
+    @Test
+    fun `onAvailableRoomsChanged prunes channels on the channel manager`() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        var prunedRooms: Pair<Any, Any>? = null
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            pruneChannelsForSessionLambda = { sessionId, roomIds -> prunedRooms = sessionId to roomIds },
+        )
+        val service = createService(context, roomNotificationChannelManager = roomNotificationChannelManager)
+
+        service.onAvailableRoomsChanged(sessionId = A_SESSION_ID, roomIds = setOf(A_ROOM_ID))
+
+        assertThat(prunedRooms).isEqualTo(A_SESSION_ID to setOf(A_ROOM_ID))
+    }
+
+    @Test
+    fun `on session logged out, the session's notification channels are cleared`() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val sessionObserver = FakeSessionObserver()
+        var clearedSession: Any? = null
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            clearAllChannelsForSessionLambda = { sessionId -> clearedSession = sessionId },
+        )
+        createService(context, sessionObserver = sessionObserver, roomNotificationChannelManager = roomNotificationChannelManager)
+
+        sessionObserver.onSessionCreated(A_SESSION_ID.value)
+        sessionObserver.onSessionDeleted(A_SESSION_ID.value)
+
+        assertThat(clearedSession).isEqualTo(A_SESSION_ID)
+    }
+
     private fun TestScope.createService(
         context: Context = InstrumentationRegistry.getInstrumentation().context,
         sessionObserver: FakeSessionObserver = FakeSessionObserver(),
         lockScreenService: FakeLockScreenService = FakeLockScreenService(),
+        roomNotificationChannelManager: FakeRoomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            clearRoomChannelLambda = { _, _ -> },
+            pruneChannelsForSessionLambda = { _, _ -> },
+            clearAllChannelsForSessionLambda = { },
+        ),
     ) = DefaultNotificationConversationService(
         context = context,
         intentProvider = FakeIntentProvider(),
@@ -184,6 +234,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         imageLoaderHolder = FakeImageLoaderHolder(),
         sessionObserver = sessionObserver,
         lockScreenService = lockScreenService,
+        roomNotificationChannelManager = roomNotificationChannelManager,
         coroutineScope = backgroundScope,
     )
 }
