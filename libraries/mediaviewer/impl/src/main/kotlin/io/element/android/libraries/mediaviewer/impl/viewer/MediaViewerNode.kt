@@ -77,6 +77,8 @@ class MediaViewerNode(
 
     private val mediaGallerySource = if (inputs.mode == MediaViewerEntryPoint.MediaViewerMode.SingleMedia) {
         SingleMediaGalleryDataSource.createFrom(inputs)
+    } else if (inputs.mode is MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup) {
+        GroupMediaGalleryDataSource.createFrom(inputs.mode as MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup)
     } else {
         val eventId = inputs.eventId
         if (eventId == null) {

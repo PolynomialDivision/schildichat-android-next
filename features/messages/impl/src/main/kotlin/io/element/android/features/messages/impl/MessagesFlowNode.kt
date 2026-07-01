@@ -86,6 +86,7 @@ import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
 import io.element.android.libraries.matrix.ui.messages.RoomMemberProfilesCache
 import io.element.android.libraries.matrix.ui.messages.RoomNamesCache
+import io.element.android.libraries.mediaviewer.api.GroupMediaItem
 import io.element.android.libraries.mediaviewer.api.MediaInfo
 import io.element.android.libraries.mediaviewer.api.MediaViewerEntryPoint
 import io.element.android.libraries.textcomposer.mentions.LocalMentionSpanUpdater
@@ -239,11 +240,17 @@ class MessagesFlowNode(
                         callback.navigateToRoomDetails()
                     }
 
-                    override fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean): Boolean {
+                    override fun handleEventClick(
+                        timelineMode: Timeline.Mode,
+                        event: TimelineItem.Event,
+                        canUseOverlay: Boolean,
+                        mediaGroupEvents: ImmutableList<TimelineItem.Event>?,
+                    ): Boolean {
                         return processEventClick(
                             timelineMode = timelineMode,
                             event = event,
                             canUseOverlay = canUseOverlay,
+                            mediaGroupEvents = mediaGroupEvents,
                         )
                     }
 
@@ -490,11 +497,17 @@ class MessagesFlowNode(
                     focusedEventId = navTarget.focusedEventId,
                 )
                 val callback = object : ThreadedMessagesNode.Callback {
-                    override fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean): Boolean {
+                    override fun handleEventClick(
+                        timelineMode: Timeline.Mode,
+                        event: TimelineItem.Event,
+                        canUseOverlay: Boolean,
+                        mediaGroupEvents: ImmutableList<TimelineItem.Event>?,
+                    ): Boolean {
                         return processEventClick(
                             timelineMode = timelineMode,
                             event = event,
                             canUseOverlay = canUseOverlay,
+                            mediaGroupEvents = mediaGroupEvents,
                         )
                     }
 
@@ -624,11 +637,19 @@ class MessagesFlowNode(
         timelineMode: Timeline.Mode,
         event: TimelineItem.Event,
         canUseOverlay: Boolean,
+        mediaGroupEvents: ImmutableList<TimelineItem.Event>? = null,
     ): Boolean {
+        // Only a real album (2+ eligible events) needs the group-scoped viewer; a single-item
+        // "group" can't happen (TimelineItemMediaGrouper never creates one), but stay defensive.
+        val groupMode = mediaGroupEvents
+            ?.takeIf { it.size > 1 }
+            ?.toGroupMediaItems()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup(it) }
         val navTarget = when (event.content) {
             is TimelineItemImageContent -> {
                 buildMediaViewerNavTarget(
-                    mode = MediaViewerEntryPoint.MediaViewerMode.TimelineImagesAndVideos(timelineMode),
+                    mode = groupMode ?: MediaViewerEntryPoint.MediaViewerMode.TimelineImagesAndVideos(timelineMode),
                     event = event,
                     content = event.content,
                     mediaSource = event.content.mediaSource,
@@ -638,7 +659,7 @@ class MessagesFlowNode(
             }
             is TimelineItemVideoContent -> {
                 buildMediaViewerNavTarget(
-                    mode = MediaViewerEntryPoint.MediaViewerMode.TimelineImagesAndVideos(timelineMode),
+                    mode = groupMode ?: MediaViewerEntryPoint.MediaViewerMode.TimelineImagesAndVideos(timelineMode),
                     event = event,
                     content = event.content,
                     mediaSource = event.content.mediaSource,
@@ -715,32 +736,57 @@ class MessagesFlowNode(
         return NavTarget.MediaViewer(
             mode = mode,
             eventId = event.eventId,
-            mediaInfo = MediaInfo(
-                filename = content.filename,
-                fileSize = content.fileSize,
-                caption = content.caption,
-                formattedCaption = content.formattedCaption,
-                mimeType = content.mimeType,
-                formattedFileSize = content.formattedFileSize,
-                fileExtension = content.fileExtension,
-                senderId = event.senderId,
-                senderName = event.safeSenderName,
-                senderAvatar = event.senderAvatar.url,
-                dateSent = dateFormatter.format(
-                    event.sentTimeMillis,
-                    mode = DateFormatterMode.Day,
-                ),
-                dateSentFull = dateFormatter.format(
-                    timestamp = event.sentTimeMillis,
-                    mode = DateFormatterMode.Full,
-                ),
-                waveform = (content as? TimelineItemVoiceContent)?.waveform,
-                duration = content.duration()?.toHumanReadableDuration(),
-            ),
+            mediaInfo = buildMediaInfo(event, content),
             mediaSource = mediaSource,
             thumbnailSource = thumbnailSource,
             canUseOverlay = canUseOverlay,
         )
+    }
+
+    private fun buildMediaInfo(event: TimelineItem.Event, content: TimelineItemEventContentWithAttachment): MediaInfo {
+        return MediaInfo(
+            filename = content.filename,
+            fileSize = content.fileSize,
+            caption = content.caption,
+            formattedCaption = content.formattedCaption,
+            mimeType = content.mimeType,
+            formattedFileSize = content.formattedFileSize,
+            fileExtension = content.fileExtension,
+            senderId = event.senderId,
+            senderName = event.safeSenderName,
+            senderAvatar = event.senderAvatar.url,
+            dateSent = dateFormatter.format(
+                event.sentTimeMillis,
+                mode = DateFormatterMode.Day,
+            ),
+            dateSentFull = dateFormatter.format(
+                timestamp = event.sentTimeMillis,
+                mode = DateFormatterMode.Full,
+            ),
+            waveform = (content as? TimelineItemVoiceContent)?.waveform,
+            duration = content.duration()?.toHumanReadableDuration(),
+        )
+    }
+
+    /**
+     * Builds the fixed, ordered list of [GroupMediaItem]s for a media-grouped album (see the
+     * timeline's media grouping feature) - only ever contains [TimelineItemImageContent]/
+     * [TimelineItemVideoContent] events, since that's all [TimelineItem.MediaGroup] ever admits.
+     */
+    private fun ImmutableList<TimelineItem.Event>.toGroupMediaItems(): List<GroupMediaItem> {
+        return mapNotNull { groupEvent ->
+            val content = groupEvent.content as? TimelineItemEventContentWithAttachment ?: return@mapNotNull null
+            GroupMediaItem(
+                eventId = groupEvent.eventId,
+                mediaInfo = buildMediaInfo(groupEvent, content),
+                mediaSource = content.mediaSource,
+                thumbnailSource = when (content) {
+                    is TimelineItemImageContent -> content.thumbnailSource
+                    is TimelineItemVideoContent -> content.thumbnailSource
+                    else -> null
+                },
+            )
+        }
     }
 
     override suspend fun attachThread(threadId: ThreadId, focusedEventId: EventId?) {

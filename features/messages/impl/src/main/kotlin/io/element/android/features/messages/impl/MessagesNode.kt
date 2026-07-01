@@ -134,7 +134,12 @@ class MessagesNode(
     private val urlPreviewStateProvider = UrlPreviewStateProvider(urlPreviewProvider)
 
     interface Callback : Plugin {
-        fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean): Boolean
+        fun handleEventClick(
+            timelineMode: Timeline.Mode,
+            event: TimelineItem.Event,
+            canUseOverlay: Boolean,
+            mediaGroupEvents: ImmutableList<TimelineItem.Event>? = null,
+        ): Boolean
         fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?)
         fun navigateToRoomMemberDetails(userId: UserId)
         fun handlePermalinkClick(data: PermalinkData)
@@ -344,13 +349,13 @@ class MessagesNode(
                 state = state,
                 onBackClick = { state.eventSink(MessagesEvent.MarkAsFullyReadAndExit(timelineController.scReadState)) },
                 onRoomDetailsClick = callback::navigateToRoomDetails,
-                onEventContentClick = { isLive, event ->
+                onEventContentClick = { isLive, event, mediaGroupEvents ->
                     if (isLive) {
-                        callback.handleEventClick(timelineController.mainTimelineMode(), event, canUseOverlay)
+                        callback.handleEventClick(timelineController.mainTimelineMode(), event, canUseOverlay, mediaGroupEvents)
                     } else {
                         val detachedTimelineMode = timelineController.detachedTimelineMode()
                         if (detachedTimelineMode != null) {
-                            callback.handleEventClick(detachedTimelineMode, event, canUseOverlay)
+                            callback.handleEventClick(detachedTimelineMode, event, canUseOverlay, mediaGroupEvents)
                         } else {
                             false
                         }

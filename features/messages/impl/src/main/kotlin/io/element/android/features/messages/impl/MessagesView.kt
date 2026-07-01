@@ -129,6 +129,7 @@ import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.textcomposer.model.TextEditorState
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.wysiwyg.link.Link
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
@@ -138,7 +139,7 @@ fun MessagesView(
     state: MessagesState,
     onBackClick: () -> Unit,
     onRoomDetailsClick: () -> Unit,
-    onEventContentClick: (isLive: Boolean, event: TimelineItem.Event) -> Boolean,
+    onEventContentClick: (isLive: Boolean, event: TimelineItem.Event, mediaGroupEvents: ImmutableList<TimelineItem.Event>?) -> Boolean,
     onUserDataClick: (UserId) -> Unit,
     onLinkClick: (String, Boolean) -> Unit,
     onSendLocationClick: () -> Unit,
@@ -172,7 +173,10 @@ fun MessagesView(
 
     fun onContentClick(event: TimelineItem.Event) {
         Timber.v("onMessageClick= ${event.id}")
-        val hideKeyboard = onEventContentClick(state.timelineState.isLive, event)
+        val mediaGroupEvents = state.timelineState.timelineItems.firstNotNullOfOrNull { item ->
+            (item as? TimelineItem.MediaGroup)?.events?.takeIf { events -> events.any { it.eventId == event.eventId } }
+        }
+        val hideKeyboard = onEventContentClick(state.timelineState.isLive, event, mediaGroupEvents)
         if (hideKeyboard) {
             localView.hideKeyboard()
         }
@@ -658,7 +662,7 @@ internal fun MessagesViewPreview(@PreviewParameter(MessagesStateProvider::class)
         state = state,
         onBackClick = {},
         onRoomDetailsClick = {},
-        onEventContentClick = { _, _ -> false },
+        onEventContentClick = { _, _, _ -> false },
         onUserDataClick = {},
         onLinkClick = { _, _ -> },
         onSendLocationClick = {},
@@ -713,7 +717,7 @@ internal fun MessagesViewA11yPreview() = ElementPreview {
         ),
         onBackClick = {},
         onRoomDetailsClick = {},
-        onEventContentClick = { _, _ -> false },
+        onEventContentClick = { _, _, _ -> false },
         onUserDataClick = {},
         onLinkClick = { _, _ -> },
         onSendLocationClick = {},
