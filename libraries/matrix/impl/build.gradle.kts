@@ -23,11 +23,12 @@ setupDependencyInjection()
 dependencies {
     implementation(projects.schildi.matrixsdk)
     implementation(projects.schildi.lib)
-    releaseImplementation(libs.matrix.sdk)
     if (file("${rootDir.path}/libraries/rustsdk/matrix-rust-sdk.aar").exists()) {
-        println("\nNote: Using local binary of the Rust SDK.\n")
+        println("\nNote: Using local binary of the Rust SDK (release and debug).\n")
+        releaseImplementation(projects.libraries.rustsdk)
         debugImplementation(projects.libraries.rustsdk)
     } else {
+        releaseImplementation(libs.matrix.sdk)
         debugImplementation(libs.matrix.sdk)
     }
     implementation(projects.libraries.rustlsTls)
