@@ -13,26 +13,50 @@ import io.element.android.features.roomdetails.impl.aRoomNotificationSettings
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
+import io.element.android.libraries.preferences.api.store.NotificationSound
+import io.element.android.libraries.preferences.api.store.RoomNotificationChannelSettings
+import io.element.android.libraries.preferences.api.store.RoomNotificationPriority
 
 internal class UserDefinedRoomNotificationSettingsStateProvider : PreviewParameterProvider<RoomNotificationSettingsState> {
     override val values: Sequence<RoomNotificationSettingsState>
         get() = sequenceOf(
-            RoomNotificationSettingsState(
-                showUserDefinedSettingStyle = false,
-                roomName = "Room 1",
-                AsyncData.Success(
-                    aRoomNotificationSettings(
-                        mode = RoomNotificationMode.MUTE,
-                        isDefault = false
-                    )
+            aState(),
+            aState(
+                roomChannelSettings = RoomNotificationChannelSettings(
+                    sound = NotificationSound.ElementDefault,
+                    soundDisplayName = null,
+                    channelVersion = 1,
+                    priority = RoomNotificationPriority.HIGH,
+                    showMessagePreview = false,
                 ),
-                pendingRoomNotificationMode = null,
-                pendingSetDefault = null,
-                defaultRoomNotificationMode = RoomNotificationMode.ALL_MESSAGES,
-                setNotificationSettingAction = AsyncAction.Uninitialized,
-                restoreDefaultAction = AsyncAction.Uninitialized,
-                displayMentionsOnlyDisclaimer = false,
-                eventSink = { },
+                soundDisplayName = "Default",
             ),
         )
+
+    private fun aState(
+        roomChannelSettings: RoomNotificationChannelSettings? = null,
+        soundDisplayName: String = "Default",
+    ) = RoomNotificationSettingsState(
+        showUserDefinedSettingStyle = false,
+        roomName = "Room 1",
+        AsyncData.Success(
+            aRoomNotificationSettings(
+                mode = RoomNotificationMode.MUTE,
+                isDefault = false
+            )
+        ),
+        pendingRoomNotificationMode = null,
+        pendingSetDefault = null,
+        defaultRoomNotificationMode = RoomNotificationMode.ALL_MESSAGES,
+        setNotificationSettingAction = AsyncAction.Uninitialized,
+        restoreDefaultAction = AsyncAction.Uninitialized,
+        displayMentionsOnlyDisclaimer = false,
+        roomChannelSettings = roomChannelSettings,
+        soundDisplayName = soundDisplayName,
+        soundCopyError = false,
+        showSoundDialog = false,
+        showPriorityDialog = false,
+        pendingSoundPickerLaunch = 0,
+        eventSink = { },
+    )
 }

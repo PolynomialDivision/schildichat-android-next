@@ -13,8 +13,17 @@ import io.element.android.features.roomdetails.impl.aJoinedRoom
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.test.AN_EXCEPTION
 import io.element.android.libraries.matrix.test.A_ROOM_ID
+import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.notificationsettings.FakeNotificationSettingsService
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import io.element.android.libraries.preferences.api.store.NotificationSound
+import io.element.android.libraries.preferences.api.store.RoomNotificationPriority
+import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
+import io.element.android.libraries.push.api.notifications.sound.NotificationSoundCopier
+import io.element.android.libraries.push.test.notifications.FakeSoundDisplayNameResolver
+import io.element.android.libraries.push.test.notifications.channels.FakeRoomNotificationChannelManager
+import io.element.android.libraries.push.test.notifications.sound.FakeNotificationSoundCopier
+import io.element.android.services.toolbox.test.strings.FakeStringProvider
 import io.element.android.tests.testutils.awaitLastSequentialItem
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.test
@@ -162,13 +171,123 @@ class RoomNotificationSettingsPresenterTest {
         }
     }
 
+    @Test
+    fun `present - setting a room sound persists it and recreates the channel`() = runTest {
+        val sessionPreferencesStore = InMemorySessionPreferencesStore()
+        var recreatedRoom: Any? = null
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            onRoomNotificationSettingsChangedLambda = { sessionId, roomId, _ -> recreatedRoom = sessionId to roomId },
+        )
+        val presenter = createRoomNotificationSettingsPresenter(
+            sessionPreferencesStore = sessionPreferencesStore,
+            roomNotificationChannelManager = roomNotificationChannelManager,
+        )
+        presenter.test {
+            awaitItem().eventSink(RoomNotificationSettingsEvent.SetSound(NotificationSound.SystemDefault))
+            val updatedState = consumeItemsUntilPredicate {
+                it.roomChannelSettings?.sound == NotificationSound.SystemDefault
+            }.last()
+            assertThat(updatedState.roomChannelSettings?.sound).isEqualTo(NotificationSound.SystemDefault)
+            assertThat(recreatedRoom).isEqualTo(A_SESSION_ID to A_ROOM_ID)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - setting priority persists it and recreates the channel`() = runTest {
+        val sessionPreferencesStore = InMemorySessionPreferencesStore()
+        var channelRecreated = false
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            onRoomNotificationSettingsChangedLambda = { _, _, _ -> channelRecreated = true },
+        )
+        val presenter = createRoomNotificationSettingsPresenter(
+            sessionPreferencesStore = sessionPreferencesStore,
+            roomNotificationChannelManager = roomNotificationChannelManager,
+        )
+        presenter.test {
+            awaitItem().eventSink(RoomNotificationSettingsEvent.SetPriority(RoomNotificationPriority.HIGH))
+            val updatedState = consumeItemsUntilPredicate {
+                it.roomChannelSettings?.priority == RoomNotificationPriority.HIGH
+            }.last()
+            assertThat(updatedState.roomChannelSettings?.priority).isEqualTo(RoomNotificationPriority.HIGH)
+            assertThat(updatedState.showPriorityDialog).isFalse()
+            assertThat(channelRecreated).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - disabling the message preview persists it`() = runTest {
+        val sessionPreferencesStore = InMemorySessionPreferencesStore()
+        val presenter = createRoomNotificationSettingsPresenter(
+            sessionPreferencesStore = sessionPreferencesStore,
+            roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+                onRoomNotificationSettingsChangedLambda = { _, _, _ -> },
+            ),
+        )
+        presenter.test {
+            awaitItem().eventSink(RoomNotificationSettingsEvent.SetPreviewEnabled(false))
+            val updatedState = consumeItemsUntilPredicate {
+                it.roomChannelSettings?.showMessagePreview == false
+            }.last()
+            assertThat(updatedState.roomChannelSettings?.showMessagePreview).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - resetting channel settings clears the room channel`() = runTest {
+        val sessionPreferencesStore = InMemorySessionPreferencesStore()
+        var clearedRoom: Any? = null
+        val presenter = createRoomNotificationSettingsPresenter(
+            sessionPreferencesStore = sessionPreferencesStore,
+            roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+                clearRoomChannelLambda = { sessionId, roomId -> clearedRoom = sessionId to roomId },
+            ),
+        )
+        presenter.test {
+            awaitItem().eventSink(RoomNotificationSettingsEvent.ResetChannelSettings)
+            awaitLastSequentialItem()
+            assertThat(clearedRoom).isEqualTo(A_SESSION_ID to A_ROOM_ID)
+        }
+    }
+
+    @Test
+    fun `present - show and dismiss sound and priority dialogs`() = runTest {
+        val presenter = createRoomNotificationSettingsPresenter()
+        presenter.test {
+            val initialState = awaitItem()
+            assertThat(initialState.showSoundDialog).isFalse()
+            assertThat(initialState.showPriorityDialog).isFalse()
+
+            initialState.eventSink(RoomNotificationSettingsEvent.ShowSoundDialog)
+            assertThat(awaitItem().showSoundDialog).isTrue()
+            initialState.eventSink(RoomNotificationSettingsEvent.DismissSoundDialog)
+            assertThat(awaitItem().showSoundDialog).isFalse()
+
+            initialState.eventSink(RoomNotificationSettingsEvent.ShowPriorityDialog)
+            assertThat(awaitItem().showPriorityDialog).isTrue()
+            initialState.eventSink(RoomNotificationSettingsEvent.DismissPriorityDialog)
+            assertThat(awaitItem().showPriorityDialog).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun createRoomNotificationSettingsPresenter(
         notificationSettingsService: FakeNotificationSettingsService = FakeNotificationSettingsService(),
         room: FakeJoinedRoom = aJoinedRoom(notificationSettingsService = notificationSettingsService),
+        sessionPreferencesStore: InMemorySessionPreferencesStore = InMemorySessionPreferencesStore(),
+        roomNotificationChannelManager: FakeRoomNotificationChannelManager = FakeRoomNotificationChannelManager(),
+        notificationSoundCopier: NotificationSoundCopier = FakeNotificationSoundCopier(),
     ): RoomNotificationSettingsPresenter {
         return RoomNotificationSettingsPresenter(
             room = room,
             notificationSettingsService = notificationSettingsService,
+            sessionPreferencesStore = sessionPreferencesStore,
+            roomNotificationChannelManager = roomNotificationChannelManager,
+            notificationSoundCopier = notificationSoundCopier,
+            soundDisplayNameResolver = FakeSoundDisplayNameResolver(),
+            stringProvider = FakeStringProvider(),
             showUserDefinedSettingStyle = false,
         )
     }

@@ -142,6 +142,9 @@ private fun RoomSpecificNotificationSettingsView(
                         },
                     )
                 }
+                if (state.displayNotificationMode != RoomNotificationMode.MUTE) {
+                    RoomChannelPreferenceCategory(state = state)
+                }
             }
 
             AsyncActionView(
