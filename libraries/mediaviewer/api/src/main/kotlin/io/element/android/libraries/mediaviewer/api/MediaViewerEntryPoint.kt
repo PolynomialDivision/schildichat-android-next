@@ -53,5 +53,22 @@ interface MediaViewerEntryPoint : FeatureEntryPoint {
 
         @Parcelize
         data class TimelineFilesAndAudios(val timelineMode: Timeline.Mode) : MediaViewerMode
+
+        /**
+         * A fixed, ordered list of images/videos scoped to a single visually-grouped media album
+         * (see the timeline's media grouping feature) - swiping only navigates within [items],
+         * not the whole room's media, unlike [TimelineImagesAndVideos].
+         */
+        @Parcelize
+        data class TimelineMediaGroup(val items: List<GroupMediaItem>) : MediaViewerMode
     }
 }
+
+/** A single image/video belonging to a [MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup]. */
+@Parcelize
+data class GroupMediaItem(
+    val eventId: EventId?,
+    val mediaInfo: MediaInfo,
+    val mediaSource: MediaSource,
+    val thumbnailSource: MediaSource?,
+) : Parcelable

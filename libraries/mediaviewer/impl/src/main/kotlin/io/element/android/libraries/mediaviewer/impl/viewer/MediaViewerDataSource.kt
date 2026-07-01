@@ -63,7 +63,8 @@ class MediaViewerDataSource(
 
     private val galleryMode = when (mode) {
         MediaViewerMode.SingleMedia,
-        is MediaViewerMode.TimelineImagesAndVideos -> MediaGalleryMode.Images
+        is MediaViewerMode.TimelineImagesAndVideos,
+        is MediaViewerMode.TimelineMediaGroup -> MediaGalleryMode.Images
         is MediaViewerMode.TimelineFilesAndAudios -> MediaGalleryMode.Files
     }
 
