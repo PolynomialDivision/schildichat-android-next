@@ -307,6 +307,7 @@ fun aMediaViewerState(
     currentIndex: Int = 0,
     canShowInfo: Boolean = true,
     mediaBottomSheetState: MediaBottomSheetState = MediaBottomSheetState.Hidden,
+    reverseSwipeDirection: Boolean = true,
     eventSink: (MediaViewerEvent) -> Unit = {},
 ) = MediaViewerState(
     initiallySelectedEventId = EventId("\$a:b"),
@@ -315,5 +316,6 @@ fun aMediaViewerState(
     snackbarMessage = null,
     canShowInfo = canShowInfo,
     mediaBottomSheetState = mediaBottomSheetState,
+    reverseSwipeDirection = reverseSwipeDirection,
     eventSink = eventSink,
 )

@@ -27,6 +27,13 @@ data class MediaViewerState(
     val snackbarMessage: SnackbarMessage?,
     val canShowInfo: Boolean,
     val mediaBottomSheetState: MediaBottomSheetState,
+    /**
+     * Whether the pager should use a reversed swipe direction, i.e. swiping right (towards higher
+     * indices) rather than left. This matches the existing whole-room gallery's newest-first index
+     * order, but is wrong for a [io.element.android.libraries.mediaviewer.api.MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup]
+     * album, whose items are already in natural left-to-right/forward order.
+     */
+    val reverseSwipeDirection: Boolean,
     val eventSink: (MediaViewerEvent) -> Unit,
 )
 
