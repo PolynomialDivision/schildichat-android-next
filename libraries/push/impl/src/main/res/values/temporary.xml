@@ -8,5 +8,4 @@
     <string name="notification_hidden_message_preview">New message</string>
     <string name="notification_channel_group_private_chats">Private chats</string>
     <string name="notification_channel_group_rooms">Rooms</string>
-    <string name="notification_channel_group_other">Other</string>
 </resources>
