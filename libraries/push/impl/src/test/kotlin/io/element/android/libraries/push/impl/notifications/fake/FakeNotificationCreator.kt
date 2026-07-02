@@ -52,12 +52,24 @@ class FakeNotificationCreator(
         largeIcon: Bitmap?,
         lastMessageTimestamp: Long,
         tickerText: String,
+        forceOnlyAlertOnce: Boolean,
         existingNotification: Notification?,
         imageLoader: ImageLoader,
         events: List<NotifiableMessageEvent>,
     ): Notification {
         return createMessagesListNotificationResult(
-            listOf(notificationAccountParams, roomInfo, threadId, largeIcon, lastMessageTimestamp, tickerText, existingNotification, imageLoader, events)
+            listOf(
+                notificationAccountParams,
+                roomInfo,
+                threadId,
+                largeIcon,
+                lastMessageTimestamp,
+                tickerText,
+                forceOnlyAlertOnce,
+                existingNotification,
+                imageLoader,
+                events,
+            )
         )
     }
 

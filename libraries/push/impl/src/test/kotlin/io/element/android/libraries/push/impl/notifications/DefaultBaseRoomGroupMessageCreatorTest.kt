@@ -11,6 +11,9 @@ package io.element.android.libraries.push.impl.notifications
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import chat.schildi.lib.preferences.AbstractScPref
+import chat.schildi.lib.preferences.ScPref
+import chat.schildi.lib.preferences.ScPreferencesStore
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.NotificationConfig
 import io.element.android.features.enterprise.api.EnterpriseService
@@ -31,6 +34,9 @@ import io.element.android.libraries.push.impl.notifications.fixtures.aNotifiable
 import io.element.android.services.toolbox.api.sdk.BuildVersionSdkIntProvider
 import io.element.android.services.toolbox.impl.strings.AndroidStringProvider
 import io.element.android.services.toolbox.test.sdk.FakeBuildVersionSdkIntProvider
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -243,6 +249,7 @@ fun createRoomGroupMessageCreator(
         initialsAvatarBitmapGenerator = FakeInitialsAvatarBitmapGenerator(),
     )
     return DefaultRoomGroupMessageCreator(
+        scPreferencesStore = FakeScPreferencesStore(),
         notificationCreator = createNotificationCreator(
             bitmapLoader = bitmapLoader,
             enterpriseService = enterpriseService,
@@ -250,4 +257,15 @@ fun createRoomGroupMessageCreator(
         bitmapLoader = bitmapLoader,
         stringProvider = AndroidStringProvider(context.resources)
     )
+}
+
+private class FakeScPreferencesStore : ScPreferencesStore {
+    override suspend fun <T> setSetting(scPref: ScPref<T>, value: T) = Unit
+    override suspend fun <T> setSettingTypesafe(scPref: ScPref<T>, value: Any?) = Unit
+    override fun <T> settingFlow(scPref: ScPref<T>): Flow<T> = flowOf(getCachedOrDefaultValue(scPref))
+    override fun <T> combinedSettingValueAndEnabledFlow(transform: ((ScPref<*>) -> Any?, (ScPref<*>) -> Boolean) -> T): Flow<T> = emptyFlow()
+    override fun isEnabledFlow(scPref: AbstractScPref): Flow<Boolean> = flowOf(true)
+    override fun <T> getCachedOrDefaultValue(scPref: ScPref<T>): T = scPref.defaultValue
+    override suspend fun reset() = Unit
+    override suspend fun prefetch() = Unit
 }

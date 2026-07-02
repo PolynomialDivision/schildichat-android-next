@@ -10,6 +10,7 @@ package io.element.android.libraries.preferences.impl.store
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.core.meta.BuildType
+import io.element.android.libraries.core.meta.ScBuildMeta
 import io.element.android.libraries.preferences.test.FakePreferenceDataStoreFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -31,6 +32,7 @@ class DefaultAppPreferencesStoreTest {
         gitBranchName = "test",
         flavorDescription = "test",
         flavorShortDescription = "test",
+        scBuildMeta = ScBuildMeta(mainVersion = "test", elementVersion = "test", scVariant = null),
     )
 
     @Test
