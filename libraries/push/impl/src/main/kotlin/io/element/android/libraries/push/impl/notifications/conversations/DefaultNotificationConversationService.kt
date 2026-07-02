@@ -179,6 +179,11 @@ class DefaultNotificationConversationService(
         }.onFailure {
             Timber.e(it, "Failed to prune notification channels for session $sessionId")
         }
+        runCatchingExceptions {
+            roomNotificationChannelManager.pruneInactiveOrdinaryChannels(sessionId)
+        }.onFailure {
+            Timber.e(it, "Failed to prune inactive ordinary notification channels for session $sessionId")
+        }
     }
 
     private fun clearShortcuts() {

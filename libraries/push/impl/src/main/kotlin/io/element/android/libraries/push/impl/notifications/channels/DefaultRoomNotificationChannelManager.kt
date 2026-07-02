@@ -7,6 +7,7 @@
 
 package io.element.android.libraries.push.impl.notifications.channels
 
+import android.app.NotificationChannel
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioAttributes.USAGE_NOTIFICATION
@@ -24,6 +25,7 @@ import io.element.android.libraries.di.annotations.AppCoroutineScope
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.preferences.api.store.NotificationSound
 import io.element.android.libraries.preferences.api.store.RoomNotificationChannelSettings
 import io.element.android.libraries.preferences.api.store.RoomNotificationPriority
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
@@ -55,8 +57,16 @@ class DefaultRoomNotificationChannelManager(
             return notificationChannels.getChannelIdForMessage(sessionId, noisy)
         }
         val settings = sessionStore(sessionId).getRoomNotificationChannelSettings(roomId)
-            ?: return notificationChannels.getChannelIdForMessage(sessionId, noisy)
-        return ensureRoomChannel(sessionId, roomId, roomDisplayName, settings)
+        if (settings != null) {
+            return ensureRoomChannel(sessionId, roomId, roomDisplayName, settings)
+        }
+        if (!noisy) {
+            // See the class doc: only ever promote an uncustomized room to its own channel from a
+            // genuinely noisy notification, so a room whose push rules only bing on mentions doesn't
+            // get permanently stuck at whatever importance its first (possibly silent) event implied.
+            return notificationChannels.getChannelIdForMessage(sessionId, noisy)
+        }
+        return ensureOrdinaryRoomChannel(sessionId, roomId, roomDisplayName)
     }
 
     override suspend fun shouldShowMessagePreview(sessionId: SessionId, roomId: RoomId): Boolean {
@@ -103,6 +113,51 @@ class DefaultRoomNotificationChannelManager(
         }
     }
 
+    override suspend fun pruneInactiveOrdinaryChannels(sessionId: SessionId) {
+        if (!supportNotificationChannels()) return
+        val prefix = roomChannelSessionPrefix(sessionId)
+        val lastNotifiedByHash = sessionStore(sessionId).getOrdinaryRoomChannelLastNotifiedByHash()
+        val now = System.currentTimeMillis()
+
+        val candidates = notificationManager.notificationChannels.mapNotNull { channel ->
+            val id = channel.id
+            if (!id.startsWith(prefix)) return@mapNotNull null
+            val roomHash = id.removePrefix(prefix).take(ROOM_HASH_LENGTH)
+            // A "_v<n>" suffix means this is a customized channel (see roomChannelId/versionedChannelId):
+            // those are never eligible here, only the bare/version-0 ordinary channel is.
+            val isOrdinary = id == "$prefix$roomHash"
+            if (!isOrdinary || isProtectedOrdinaryChannel(channel)) return@mapNotNull null
+            OrdinaryChannelCandidate(channelId = id, roomHash = roomHash, lastNotifiedAt = lastNotifiedByHash[roomHash] ?: 0L)
+        }
+
+        val staleByRetention = candidates.filter { now - it.lastNotifiedAt > ORDINARY_CHANNEL_RETENTION_MILLIS }
+        val remaining = candidates - staleByRetention.toSet()
+        val overBudgetCount = (remaining.size - MAX_ORDINARY_CHANNELS).coerceAtLeast(0)
+        val oldestOverBudget = remaining.sortedBy { it.lastNotifiedAt }.take(overBudgetCount)
+
+        for (candidate in staleByRetention + oldestOverBudget) {
+            notificationManager.deleteNotificationChannel(candidate.channelId)
+            sessionStore(sessionId).clearOrdinaryRoomChannelLastNotifiedByHash(candidate.roomHash)
+        }
+    }
+
+    /**
+     * True if [channel]'s live settings no longer match what [ordinaryChannelDefaultSettings] would
+     * create, or the user marked it a Priority Conversation - either way, something other than this
+     * manager's own creation logic touched it, so [pruneInactiveOrdinaryChannels] must leave it alone.
+     */
+    private fun isProtectedOrdinaryChannel(channel: NotificationChannel): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && channel.isImportantConversation) return true
+        val expectedSoundUri = context.resolveNoisySoundUri(NotificationSound.SystemDefault)
+        return channel.importance != NotificationManagerCompat.IMPORTANCE_DEFAULT ||
+            channel.sound != expectedSoundUri ||
+            !channel.shouldVibrate() ||
+            !channel.shouldShowLights() ||
+            channel.lightColor != NotificationConfig.NOTIFICATION_ACCENT_COLOR
+    }
+
+    private data class OrdinaryChannelCandidate(val channelId: String, val roomHash: String, val lastNotifiedAt: Long)
+
     private fun sessionStore(sessionId: SessionId): SessionPreferencesStore =
         sessionPreferencesStoreFactory.get(sessionId, appCoroutineScope)
 
@@ -118,6 +173,24 @@ class DefaultRoomNotificationChannelManager(
         if (notificationManager.getNotificationChannel(id) == null) {
             notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, settings))
         }
+        return id
+    }
+
+    /**
+     * Creates the room's ordinary (version 0, uncustomized) channel if it doesn't already exist,
+     * records that it was just used (for retention pruning), and returns its id.
+     */
+    private suspend fun ensureOrdinaryRoomChannel(
+        sessionId: SessionId,
+        roomId: RoomId,
+        roomDisplayName: String,
+    ): String {
+        if (!supportNotificationChannels()) return notificationChannels.getChannelIdForMessage(sessionId, noisy = true)
+        val id = roomChannelId(sessionId, roomId, version = 0)
+        if (notificationManager.getNotificationChannel(id) == null) {
+            notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, ordinaryChannelDefaultSettings()))
+        }
+        sessionStore(sessionId).recordOrdinaryRoomChannelNotified(roomId)
         return id
     }
 
@@ -160,20 +233,45 @@ class DefaultRoomNotificationChannelManager(
         return builder.build()
     }
 
-    private fun deleteRoomChannels(sessionId: SessionId, roomId: RoomId, keepId: String?) {
+    private suspend fun deleteRoomChannels(sessionId: SessionId, roomId: RoomId, keepId: String?) {
         if (!supportNotificationChannels()) return
         val baseId = roomChannelBaseId(sessionId, roomId)
+        var deletedOrdinaryChannel = false
         for (channel in notificationManager.notificationChannels) {
             val id = channel.id
             val isBaseOrVersioned = id == baseId || id.startsWith("${baseId}_v")
             if (isBaseOrVersioned && id != keepId) {
                 notificationManager.deleteNotificationChannel(id)
+                if (id == baseId) deletedOrdinaryChannel = true
             }
+        }
+        if (deletedOrdinaryChannel) {
+            sessionStore(sessionId).clearOrdinaryRoomChannelLastNotified(roomId)
         }
     }
 
+    /**
+     * The importance/sound/vibration/lights an ordinary channel is created with: matches the app's
+     * shared noisy channel (default importance, default sound, vibration and lights on), since an
+     * ordinary channel is only ever created from a notification that was already noisy - see the
+     * class doc on [RoomNotificationChannelManager].
+     */
+    private fun ordinaryChannelDefaultSettings() = RoomNotificationChannelSettings(
+        sound = NotificationSound.SystemDefault,
+        soundDisplayName = null,
+        channelVersion = 0,
+        priority = RoomNotificationPriority.DEFAULT,
+        showMessagePreview = true,
+    )
+
     companion object {
         private const val ROOM_HASH_LENGTH = 16
+
+        /** Retention window for an ordinary channel that hasn't notified: 30 days. */
+        private const val ORDINARY_CHANNEL_RETENTION_MILLIS = 30L * 24 * 60 * 60 * 1000
+
+        /** Soft cap on ordinary channels per session; the oldest-notified ones are trimmed above this. */
+        private const val MAX_ORDINARY_CHANNELS = 50
 
         private fun roomChannelSessionPrefix(sessionId: SessionId): String =
             "${ROOM_NOTIFICATION_CHANNEL_ID_BASE}_${sessionId.value.hash().take(ROOM_HASH_LENGTH)}_"

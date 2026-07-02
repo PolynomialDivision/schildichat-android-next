@@ -8,6 +8,7 @@
 package io.element.android.libraries.preferences.impl.store
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.libraries.androidutils.hash.hash
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.preferences.api.store.NotificationSound
@@ -138,5 +139,51 @@ class DefaultSessionPreferencesStoreTest {
 
         val fresh = createStore()
         assertThat(fresh.getRoomNotificationChannelSettings(roomA)).isNull()
+    }
+
+    @Test
+    fun `recordOrdinaryRoomChannelNotified is readable back by the room's hash`() = runTest {
+        val store = createStore()
+
+        store.recordOrdinaryRoomChannelNotified(roomA)
+
+        val byHash = store.getOrdinaryRoomChannelLastNotifiedByHash()
+        assertThat(byHash).containsKey(roomA.value.hash().take(16))
+    }
+
+    @Test
+    fun `ordinary last-notified timestamps for different rooms do not collide`() = runTest {
+        val store = createStore()
+
+        store.recordOrdinaryRoomChannelNotified(roomA)
+        store.recordOrdinaryRoomChannelNotified(roomB)
+
+        val byHash = store.getOrdinaryRoomChannelLastNotifiedByHash()
+        assertThat(byHash).hasSize(2)
+        assertThat(byHash).containsKey(roomA.value.hash().take(16))
+        assertThat(byHash).containsKey(roomB.value.hash().take(16))
+    }
+
+    @Test
+    fun `clearOrdinaryRoomChannelLastNotified removes only that room's entry`() = runTest {
+        val store = createStore()
+        store.recordOrdinaryRoomChannelNotified(roomA)
+        store.recordOrdinaryRoomChannelNotified(roomB)
+
+        store.clearOrdinaryRoomChannelLastNotified(roomA)
+
+        val byHash = store.getOrdinaryRoomChannelLastNotifiedByHash()
+        assertThat(byHash).doesNotContainKey(roomA.value.hash().take(16))
+        assertThat(byHash).containsKey(roomB.value.hash().take(16))
+    }
+
+    @Test
+    fun `clearOrdinaryRoomChannelLastNotifiedByHash removes the entry for that hash`() = runTest {
+        val store = createStore()
+        store.recordOrdinaryRoomChannelNotified(roomA)
+
+        store.clearOrdinaryRoomChannelLastNotifiedByHash(roomA.value.hash().take(16))
+
+        assertThat(store.getOrdinaryRoomChannelLastNotifiedByHash()).isEmpty()
     }
 }

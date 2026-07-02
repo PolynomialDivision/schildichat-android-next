@@ -19,6 +19,7 @@ import io.element.android.libraries.preferences.api.store.RoomNotificationPriori
 import io.element.android.libraries.preferences.test.FakeSessionPreferencesStoreFactory
 import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
 import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
+import io.element.android.tests.testutils.lambda.lambdaRecorder
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -47,18 +48,57 @@ class DefaultRoomNotificationChannelManagerTest {
         notificationManager = notificationManager,
         notificationChannels = notificationChannels,
         enterpriseService = enterpriseService,
-        sessionPreferencesStoreFactory = FakeSessionPreferencesStoreFactory(getLambda = { _, _ -> store }),
+        sessionPreferencesStoreFactory = FakeSessionPreferencesStoreFactory(getLambda = lambdaRecorder { _, _ -> store }),
         appCoroutineScope = MainScope(),
     )
 
     @Test
-    fun `room without custom settings falls back to the shared channel`() = runTest {
+    fun `room without custom settings and a silent notification falls back to the shared channel`() = runTest {
+        val manager = createManager()
+
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = false)
+
+        assertThat(channelId).isEqualTo("SHARED_SILENT")
+        assertThat(manager.shouldShowMessagePreview(sessionId, roomA)).isTrue()
+    }
+
+    @Test
+    fun `room without custom settings and a noisy notification gets its own ordinary channel`() = runTest {
         val manager = createManager()
 
         val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
 
-        assertThat(channelId).isEqualTo("SHARED_NOISY")
+        assertThat(channelId).isNotEqualTo("SHARED_NOISY")
+        val channel = notificationManager.getNotificationChannel(channelId)
+        assertThat(channel).isNotNull()
+        assertThat(channel!!.name).isEqualTo("Room A")
+        assertThat(channel.importance).isEqualTo(NotificationManager.IMPORTANCE_DEFAULT)
+        assertThat(channel.conversationId).isEqualTo(createShortcutId(sessionId, roomA))
+        assertThat(channel.parentChannelId).isEqualTo("SHARED_NOISY")
+        // Uncustomized, so message preview behaves exactly as before this existed.
         assertThat(manager.shouldShowMessagePreview(sessionId, roomA)).isTrue()
+    }
+
+    @Test
+    fun `an ordinary channel is only created once, not on every notification`() = runTest {
+        val manager = createManager()
+
+        val firstId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+        val secondId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+
+        assertThat(secondId).isEqualTo(firstId)
+    }
+
+    @Test
+    fun `a silent notification for a room with an existing ordinary channel still uses the shared silent channel`() = runTest {
+        // Regression test: some push rule modes only bing on specific events (e.g. mentions) within
+        // an otherwise-quiet room. The room's ordinary channel must not swallow that distinction.
+        val manager = createManager()
+        manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = false)
+
+        assertThat(channelId).isEqualTo("SHARED_SILENT")
     }
 
     @Test
@@ -186,5 +226,91 @@ class DefaultRoomNotificationChannelManagerTest {
 
         assertThat(notificationManager.getNotificationChannel(idA)).isNull()
         assertThat(notificationManager.getNotificationChannel(idB)).isNull()
+    }
+
+    @Test
+    fun `customizing a room deletes its earlier ordinary channel`() = runTest {
+        // Regression test: an ordinary channel uses version 0 (bare id), the same base id a
+        // customized channel is versioned from, so the existing delete-stale-versions cleanup
+        // must already catch it with no changes of its own.
+        val manager = createManager()
+        val ordinaryId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+
+        store.setRoomNotificationSoundAndIncrementVersion(roomA, NotificationSound.SystemDefault, null)
+        manager.onRoomNotificationSettingsChanged(sessionId, roomA, "Room A")
+
+        assertThat(notificationManager.getNotificationChannel(ordinaryId)).isNull()
+    }
+
+    @Test
+    fun `pruneInactiveOrdinaryChannels leaves customized channels alone regardless of inactivity`() = runTest {
+        val manager = createManager()
+        store.setRoomNotificationSoundAndIncrementVersion(roomA, NotificationSound.SystemDefault, null)
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+
+        manager.pruneInactiveOrdinaryChannels(sessionId)
+
+        assertThat(notificationManager.getNotificationChannel(channelId)).isNotNull()
+    }
+
+    @Test
+    fun `pruneInactiveOrdinaryChannels leaves a channel alone if its live settings were changed`() = runTest {
+        val manager = createManager()
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+        // Simulate the user changing importance for this specific channel via system Settings.
+        notificationManager.getNotificationChannel(channelId)!!.importance = NotificationManager.IMPORTANCE_LOW
+        store.givenOrdinaryRoomChannelLastNotified(roomA, System.currentTimeMillis() - THIRTY_ONE_DAYS_MILLIS)
+
+        manager.pruneInactiveOrdinaryChannels(sessionId)
+
+        assertThat(notificationManager.getNotificationChannel(channelId)).isNotNull()
+    }
+
+    @Test
+    fun `pruneInactiveOrdinaryChannels deletes an unmodified ordinary channel past the retention window`() = runTest {
+        val manager = createManager()
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+        store.givenOrdinaryRoomChannelLastNotified(roomA, System.currentTimeMillis() - THIRTY_ONE_DAYS_MILLIS)
+
+        manager.pruneInactiveOrdinaryChannels(sessionId)
+
+        assertThat(notificationManager.getNotificationChannel(channelId)).isNull()
+    }
+
+    @Test
+    fun `pruneInactiveOrdinaryChannels keeps a recently-notified ordinary channel`() = runTest {
+        val manager = createManager()
+        val channelId = manager.getChannelIdForRoom(sessionId, roomA, "Room A", noisy = true)
+
+        manager.pruneInactiveOrdinaryChannels(sessionId)
+
+        assertThat(notificationManager.getNotificationChannel(channelId)).isNotNull()
+    }
+
+    @Test
+    fun `pruneInactiveOrdinaryChannels trims the oldest channels once over the count limit`() = runTest {
+        val manager = createManager()
+        val now = System.currentTimeMillis()
+        val roomIds = (0 until MAX_ORDINARY_CHANNELS + 2).map { RoomId("!room$it:example.org") }
+        val channelIds = roomIds.mapIndexed { index, roomId ->
+            val id = manager.getChannelIdForRoom(sessionId, roomId, "Room $index", noisy = true)
+            // All well within the retention window, but with a clear oldest-first order to trim.
+            store.givenOrdinaryRoomChannelLastNotified(roomId, now - (roomIds.size - index))
+            id
+        }
+
+        manager.pruneInactiveOrdinaryChannels(sessionId)
+
+        val remaining = channelIds.count { notificationManager.getNotificationChannel(it) != null }
+        assertThat(remaining).isEqualTo(MAX_ORDINARY_CHANNELS)
+        // The two oldest-notified rooms (index 0 and 1) should be the ones trimmed.
+        assertThat(notificationManager.getNotificationChannel(channelIds[0])).isNull()
+        assertThat(notificationManager.getNotificationChannel(channelIds[1])).isNull()
+        assertThat(notificationManager.getNotificationChannel(channelIds.last())).isNotNull()
+    }
+
+    private companion object {
+        const val THIRTY_ONE_DAYS_MILLIS = 31L * 24 * 60 * 60 * 1000
+        const val MAX_ORDINARY_CHANNELS = 50
     }
 }
