@@ -216,6 +216,10 @@
     <string name="sc_theme_category_light">Light</string>
     <string name="sc_theme_category_dark">Dark</string>
 
+    <string name="sc_pref_view_membership_events_in_public_rooms_title">Membership changes in public rooms</string>
+    <string name="sc_pref_view_membership_events_in_public_rooms_title_short">Public membership</string>
+    <string name="sc_pref_view_membership_events_in_public_rooms_summary">Render in the timeline of public rooms when members join, leave or change their profile. Private rooms will render these changes independently of this setting.</string>
+
     <string name="sc_about_based_on_element_x_version">Based on Element X: %1$s</string>
     <string name="sc_about_git_revision">Built from: %1$s</string>
     <string name="sc_about_device_id">Device: %1$s</string>

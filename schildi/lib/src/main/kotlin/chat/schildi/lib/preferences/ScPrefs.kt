@@ -123,6 +123,7 @@ object ScPrefs {
     val MESSAGE_CONTEXT_MENU_TEXT_SELECTABLE = ScBoolPref("MESSAGE_CONTEXT_MENU_TEXT_SELECTABLE", true, R.string.sc_pref_message_context_menu_text_selectable_title, R.string.sc_pref_message_context_menu_text_selectable_summary, authorsChoice = true, upstreamChoice = false)
     val VIEW_HIDDEN_EVENTS = ScBoolPref("VIEW_HIDDEN_EVENTS", false, R.string.sc_pref_view_hidden_events_title, authorsChoice = false, upstreamChoice = false)
     val VIEW_REDACTIONS = ScBoolPref("VIEW_REDACTIONS", true, R.string.sc_pref_view_redactions_title, R.string.sc_pref_view_redactions_summary, dependencies = listOf(VIEW_HIDDEN_EVENTS.toDependency(expect = false)), disabledValue = true, upstreamChoice = true)
+    val VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS = ScBoolPref("VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS", false, R.string.sc_pref_view_membership_events_in_public_rooms_title, R.string.sc_pref_view_membership_events_in_public_rooms_summary, dependencies = listOf(VIEW_HIDDEN_EVENTS.toDependency(expect = false)), disabledValue = true, upstreamChoice = false, authorsChoice = true)
     val LEGACY_MESSAGE_RENDERING = ScBoolPref("LEGACY_MESSAGE_RENDERING", false, R.string.sc_pref_legacy_message_rendering_title, R.string.sc_pref_legacy_message_rendering_summary, authorsChoice = false, upstreamChoice = true)
     val VERBOSE_CONVERSATION_ICONS = ScBoolPref("VERBOSE_CONVERSATION_ICONS", false, R.string.sc_pref_verbose_room_title_icons_title, R.string.sc_pref_verbose_room_title_icons_summary, authorsChoice = false, upstreamChoice = true)
 
@@ -210,6 +211,7 @@ object ScPrefs {
         ScPrefScreen(R.string.sc_pref_category_timeline, null, listOf(
             SC_TIMELINE_LAYOUT,
             VIEW_REDACTIONS,
+            VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS,
             //RENDER_INLINE_IMAGES,
             FLOATING_DATE,
             HIDE_CALL_TOOLBAR_ACTION,
@@ -286,6 +288,7 @@ object ScPrefs {
         // Timeline settings that don't reload live while the room is open
         ScPrefCategory(R.string.sc_pref_category_timeline_short, null, listOf(
             VIEW_REDACTIONS,
+            VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS.copy(titleRes = R.string.sc_pref_view_membership_events_in_public_rooms_title_short),
             VIEW_HIDDEN_EVENTS,
             SYNC_READ_RECEIPT_AND_MARKER.copy(titleRes = R.string.sc_sync_read_receipt_and_marker_title_short),
             MARK_READ_REQUIRES_SEEN_UNREAD_LINE.copy(titleRes = R.string.sc_pref_mark_read_requires_seen_unread_line_title_short),
