@@ -17,7 +17,6 @@ import io.element.android.compound.tokens.generated.internal.LightColorTokens
 @Stable
 class ScThemeExposures(
     isScTheme: Boolean,
-    horizontalDividerThickness: Dp,
     colorOnAccent: Color,
     bubbleBgIncoming: Color?,
     bubbleBgOutgoing: Color?,
@@ -46,8 +45,6 @@ class ScThemeExposures(
     tertiaryFgNoAlpha: Color,
 ) {
     var isScTheme by mutableStateOf(isScTheme)
-        private set
-    var horizontalDividerThickness by mutableStateOf(horizontalDividerThickness)
         private set
     var colorOnAccent by mutableStateOf(colorOnAccent)
         private set
@@ -104,7 +101,6 @@ class ScThemeExposures(
 
     fun copy(
         isScTheme: Boolean = this.isScTheme,
-        horizontalDividerThickness: Dp = this.horizontalDividerThickness,
         colorOnAccent: Color = this.colorOnAccent,
         bubbleBgIncoming: Color? = this.bubbleBgIncoming,
         bubbleBgOutgoing: Color? = this.bubbleBgOutgoing,
@@ -133,7 +129,6 @@ class ScThemeExposures(
         tertiaryFgNoAlpha: Color = this.tertiaryFgNoAlpha,
     ) = ScThemeExposures(
         isScTheme = isScTheme,
-        horizontalDividerThickness = horizontalDividerThickness,
         colorOnAccent = colorOnAccent,
         bubbleBgIncoming = bubbleBgIncoming,
         bubbleBgOutgoing = bubbleBgOutgoing,
@@ -164,7 +159,6 @@ class ScThemeExposures(
 
     fun updateColorsFrom(other: ScThemeExposures) {
         isScTheme = other.isScTheme
-        horizontalDividerThickness = other.horizontalDividerThickness
         colorOnAccent = other.colorOnAccent
         bubbleBgIncoming = other.bubbleBgIncoming
         bubbleBgOutgoing = other.bubbleBgOutgoing
@@ -197,7 +191,6 @@ class ScThemeExposures(
 @OptIn(CoreColorToken::class)
 internal val elementLightScExposures = ScThemeExposures(
     isScTheme = false,
-    horizontalDividerThickness = 0.5.dp, /** [io.element.android.libraries.designsystem.theme.components.HorizontalDivider] */
     colorOnAccent = Color.White,
     bubbleBgIncoming = null,
     bubbleBgOutgoing = null,
@@ -209,7 +202,7 @@ internal val elementLightScExposures = ScThemeExposures(
     timestampRadius = 10.0.dp,
     timestampOverlayBg = Color.Magenta, // unused for non-SC themes
     unreadIndicatorLine = null,
-    unreadIndicatorThickness = 0.5.dp, // like horizontalDividerThickness
+    unreadIndicatorThickness = 1.dp, /** [io.element.android.libraries.designsystem.theme.components.HorizontalDivider] */
     mentionFgLegacy = null,
     mentionBgLegacy = null,
     mentionBgOtherLegacy = null,
@@ -229,7 +222,6 @@ internal val elementLightScExposures = ScThemeExposures(
 @OptIn(CoreColorToken::class)
 internal val elementDarkScExposures = ScThemeExposures(
     isScTheme = false,
-    horizontalDividerThickness = 0.5.dp, /** [io.element.android.libraries.designsystem.theme.components.HorizontalDivider] */
     colorOnAccent = Color.White,
     bubbleBgIncoming = null,
     bubbleBgOutgoing = null,
@@ -241,7 +233,7 @@ internal val elementDarkScExposures = ScThemeExposures(
     timestampRadius = 10.0.dp,
     timestampOverlayBg = Color.Magenta, // unused for non-SC themes
     unreadIndicatorLine = null,
-    unreadIndicatorThickness = 0.5.dp, // like horizontalDividerThickness
+    unreadIndicatorThickness = 1.dp, /** [io.element.android.libraries.designsystem.theme.components.HorizontalDivider] */
     mentionFgLegacy = null,
     mentionBgLegacy = null,
     mentionBgOtherLegacy = null,

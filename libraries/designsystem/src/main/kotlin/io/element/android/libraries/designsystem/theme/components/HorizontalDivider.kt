@@ -10,7 +10,6 @@ package io.element.android.libraries.designsystem.theme.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DividerDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,15 +17,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import chat.schildi.theme.ScTheme
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.preview.ElementThemedPreview
 import io.element.android.libraries.designsystem.preview.PreviewGroup
 
 @Composable
 fun HorizontalDivider(
     modifier: Modifier = Modifier,
-    thickness: Dp = ScTheme.exposures.horizontalDividerThickness,
-    color: Color = DividerDefaults.color,
+    thickness: Dp = ElementDividerDefaults.thickness,
+    color: Color = ElementDividerDefaults.color,
 ) {
     androidx.compose.material3.HorizontalDivider(
         modifier = modifier,
@@ -35,12 +34,11 @@ fun HorizontalDivider(
     )
 }
 
-/* SC: please use ElementTheme.colors.scThemeExposures.horizontalDividerThickness instead
 object ElementDividerDefaults {
-    // SC change thickness
-    val thickness = 0.5.dp
+    val thickness = 1.dp
+    val color
+        @Composable get() = ElementTheme.colors.separatorSecondary
 }
- */
 
 @Preview(group = PreviewGroup.Dividers)
 @Composable

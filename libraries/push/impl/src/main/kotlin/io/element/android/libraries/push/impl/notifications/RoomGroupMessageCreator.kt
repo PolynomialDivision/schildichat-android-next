@@ -71,7 +71,7 @@ class DefaultRoomGroupMessageCreator(
         val roomIsDm = !roomIsGroup
         return notificationCreator.createMessagesListNotification(
             notificationAccountParams = notificationAccountParams,
-            RoomEventGroupInfo(
+            roomInfo = RoomEventGroupInfo(
                 sessionId = notificationAccountParams.user.userId,
                 roomId = roomId,
                 roomDisplayName = roomName,
