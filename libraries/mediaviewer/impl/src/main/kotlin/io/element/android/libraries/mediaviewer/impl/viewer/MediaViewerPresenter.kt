@@ -182,6 +182,10 @@ class MediaViewerPresenter(
             snackbarMessage = snackbarMessage,
             canShowInfo = inputs.canShowInfo,
             mediaBottomSheetState = mediaBottomSheetState,
+            // The whole-room gallery lists media newest-first, so reversing the pager's swipe
+            // direction makes swiping feel chronological. A media group's items are already in
+            // natural left-to-right order, so that reversal would feel backwards there.
+            reverseSwipeDirection = inputs.mode !is MediaViewerEntryPoint.MediaViewerMode.TimelineMediaGroup,
             eventSink = ::handleEvent,
         )
     }
