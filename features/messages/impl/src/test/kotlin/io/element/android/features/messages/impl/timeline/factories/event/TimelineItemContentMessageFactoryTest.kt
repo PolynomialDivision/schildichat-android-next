@@ -93,6 +93,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             htmlDocument = null,
             isEdited = false,
             formattedBody = SpannedString("body"),
+            formattedBodySc = scFormattedPlaintextBody("body", null),
         )
         assertThat(result).isEqualTo(expected)
     }
@@ -131,6 +132,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             htmlDocument = null,
             isEdited = false,
             formattedBody = "body",
+            formattedBodySc = scFormattedPlaintextBody("body", null),
         )
         assertThat(result).isEqualTo(expected)
     }
@@ -149,6 +151,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             htmlDocument = null,
             isEdited = false,
             formattedBody = SpannedString("body"),
+            formattedBodySc = scFormattedPlaintextBody("body", null),
         )
         assertThat(result).isEqualTo(expected)
     }
@@ -162,11 +165,17 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             senderProfile = aProfileDetails(),
             eventId = AN_EVENT_ID,
         ) as TimelineItemTextContent
-        val expected = TimelineItemTextContent(body = "https://www.example.org", htmlDocument = null, isEdited = false, formattedBody = buildSpannedString {
-            inSpans(URLSpan("https://www.example.org")) {
-                append("https://www.example.org")
-            }
-        })
+        val expected = TimelineItemTextContent(
+            body = "https://www.example.org",
+            htmlDocument = null,
+            isEdited = false,
+            formattedBody = buildSpannedString {
+                inSpans(URLSpan("https://www.example.org")) {
+                    append("https://www.example.org")
+                }
+            },
+            formattedBodySc = scFormattedPlaintextBody("https://www.example.org", null),
+        )
         assertThat(result.body).isEqualTo(expected.body)
         assertThat(result.htmlDocument).isEqualTo(expected.htmlDocument)
         assertThat(result.plainText).isEqualTo(expected.plainText)
@@ -237,6 +246,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 0L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = false,
             duration = Duration.ZERO,
             mediaSource = MediaSource(url = "url", json = null),
@@ -291,6 +301,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 555L,
             caption = "body.mp4 caption",
             formattedCaption = SpannedString("formatted"),
+            formattedCaptionSc = MessageFormatDefaults.parser.parseHtml("formatted", MessageFormatDefaults.parseStyle, true),
             isEdited = true,
             duration = 1.minutes,
             mediaSource = MediaSource(url = "url", json = null),
@@ -322,6 +333,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 0L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = false,
             duration = Duration.ZERO,
             mediaSource = MediaSource(url = "url", json = null),
@@ -359,6 +371,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 123L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = true,
             duration = 1.minutes,
             mediaSource = MediaSource(url = "url", json = null),
@@ -384,6 +397,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             eventId = AN_EVENT_ID,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = false,
             duration = Duration.ZERO,
             mediaSource = MediaSource(url = "url", json = null),
@@ -427,6 +441,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 123L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = true,
             duration = 1.minutes,
             mediaSource = MediaSource(url = "url", json = null),
@@ -452,6 +467,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 0L,
             caption = "body",
             formattedCaption = null,
+            formattedCaptionSc = scFormattedPlaintextBody("body", null),
             isEdited = false,
             mediaSource = MediaSource(url = "url", json = null),
             thumbnailSource = null,
@@ -483,6 +499,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 8_192L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = false,
             mediaSource = MediaSource(url = "url", json = null),
             thumbnailSource = MediaSource(url = "thumbnail://url", json = null),
@@ -533,6 +550,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 888L,
             caption = "body.jpg caption",
             formattedCaption = SpannedString("formatted"),
+            formattedCaptionSc = MessageFormatDefaults.parser.parseHtml("formatted", MessageFormatDefaults.parseStyle, true),
             isEdited = true,
             mediaSource = MediaSource(url = "url", json = null),
             thumbnailSource = MediaSource("url_thumbnail"),
@@ -563,6 +581,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 0L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = false,
             mediaSource = MediaSource(url = "url", json = null),
             thumbnailSource = null,
@@ -606,6 +625,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             fileSize = 123L,
             caption = null,
             formattedCaption = null,
+            formattedCaptionSc = null,
             isEdited = true,
             mediaSource = MediaSource(url = "url", json = null),
             thumbnailSource = MediaSource("url_thumbnail"),
@@ -629,6 +649,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             body = "body",
             htmlDocument = null,
             formattedBody = SpannedString("body"),
+            formattedBodySc = scFormattedPlaintextBody("body", null),
             isEdited = false,
         )
         assertThat(result).isEqualTo(expected)
@@ -664,6 +685,7 @@ class TimelineItemContentMessageFactoryTest : RobolectricTest() {
             body = "* Bob body",
             htmlDocument = null,
             formattedBody = SpannedString("* Bob body"),
+            formattedBodySc = scFormattedPlaintextBody("* Bob body", null),
             isEdited = false,
         )
         assertThat(result).isEqualTo(expected)

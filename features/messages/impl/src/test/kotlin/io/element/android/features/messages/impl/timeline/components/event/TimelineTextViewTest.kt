@@ -19,6 +19,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import androidx.core.text.buildSpannedString
 import androidx.core.text.inSpans
+import com.beeper.android.messageformat.MatrixBodyParseResult
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextBasedContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextContent
@@ -159,6 +160,7 @@ class TimelineTextViewTest : RobolectricTest() {
             body = body,
             htmlDocument = null,
             formattedBody = formattedBody ?: SpannedString(body),
+            formattedBodySc = MatrixBodyParseResult(body),
             isEdited = false
         )
 }

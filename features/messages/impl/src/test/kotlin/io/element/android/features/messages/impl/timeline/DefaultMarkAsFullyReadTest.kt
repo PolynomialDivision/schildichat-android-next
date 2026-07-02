@@ -35,7 +35,7 @@ class DefaultMarkAsFullyReadTest {
             },
             coroutineDispatchers = testCoroutineDispatchers(),
         )
-        assertThat(markAsFullyRead.invoke(A_ROOM_ID, AN_EVENT_ID).isFailure).isTrue()
+        assertThat(markAsFullyRead.invoke(A_ROOM_ID, AN_EVENT_ID, withReadReceipt = null).isFailure).isTrue()
         runCurrent()
     }
 
@@ -48,7 +48,7 @@ class DefaultMarkAsFullyReadTest {
             ),
             coroutineDispatchers = testCoroutineDispatchers(),
         )
-        assertThat(markAsFullyRead.invoke(A_ROOM_ID, AN_EVENT_ID).isSuccess).isTrue()
+        assertThat(markAsFullyRead.invoke(A_ROOM_ID, AN_EVENT_ID, withReadReceipt = null).isSuccess).isTrue()
         runCurrent()
         markAsFullyReadResult.assertions().isCalledOnce().with(value(A_ROOM_ID), value(AN_EVENT_ID))
     }

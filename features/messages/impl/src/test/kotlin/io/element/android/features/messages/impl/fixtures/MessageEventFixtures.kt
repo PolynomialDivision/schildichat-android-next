@@ -8,6 +8,7 @@
 
 package io.element.android.features.messages.impl.fixtures
 
+import com.beeper.android.messageformat.MatrixBodyParseResult
 import io.element.android.features.messages.impl.timeline.aTimelineItemDebugInfo
 import io.element.android.features.messages.impl.timeline.aTimelineItemReactions
 import io.element.android.features.messages.impl.timeline.model.ReadReceiptData
@@ -40,7 +41,13 @@ internal fun aMessageEvent(
     isMine: Boolean = true,
     isEditable: Boolean = true,
     canBeRepliedTo: Boolean = true,
-    content: TimelineItemEventContent = TimelineItemTextContent(body = A_MESSAGE, htmlDocument = null, formattedBody = A_MESSAGE, isEdited = false),
+    content: TimelineItemEventContent = TimelineItemTextContent(
+        body = A_MESSAGE,
+        htmlDocument = null,
+        formattedBody = A_MESSAGE,
+        formattedBodySc = MatrixBodyParseResult(A_MESSAGE),
+        isEdited = false,
+    ),
     inReplyTo: InReplyToDetails? = null,
     threadInfo: TimelineItemThreadInfo? = null,
     sendState: LocalEventSendState = LocalEventSendState.Sent(AN_EVENT_ID),

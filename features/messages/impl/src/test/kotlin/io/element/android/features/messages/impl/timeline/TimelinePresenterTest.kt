@@ -8,7 +8,13 @@
 
 package io.element.android.features.messages.impl.timeline
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.ReceiveTurbine
+import chat.schildi.lib.preferences.LocalScPreferencesStore
+import chat.schildi.lib.preferences.NotExactlyACompositionLocal
+import chat.schildi.lib.preferences.PreviewScPreferencesStore
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.location.test.FakeActiveLiveLocationShareManager
 import io.element.android.features.messages.impl.FakeMessagesNavigator
@@ -16,6 +22,7 @@ import io.element.android.features.messages.impl.crypto.sendfailure.resolve.aRes
 import io.element.android.features.messages.impl.fixtures.aMessageEvent
 import io.element.android.features.messages.impl.fixtures.aTimelineItemsFactoryCreator
 import io.element.android.features.messages.impl.timeline.components.MessageShieldData
+import io.element.android.libraries.architecture.Presenter
 import io.element.android.features.messages.impl.timeline.components.aCriticalShield
 import io.element.android.features.messages.impl.timeline.model.NewEventState
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
@@ -84,6 +91,9 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Before
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import org.junit.Rule
 import org.junit.Test
 import java.util.Date
@@ -92,9 +102,18 @@ import kotlin.time.Duration.Companion.seconds
 
 @Suppress("LargeClass")
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@RunWith(RobolectricTestRunner::class)
 class TimelinePresenterTest {
     @get:Rule
     val warmUpRule = WarmUpRule()
+
+    @Before
+    fun setUp() {
+        // TimelinePresenter reads from the global LocalScPreferencesStore; without this, it
+        // falls back to the crashing FakeScPreferencesStore sentinel meant to catch missing
+        // providers in production.
+        LocalScPreferencesStore = NotExactlyACompositionLocal(PreviewScPreferencesStore)
+    }
 
     @Test
     fun `present - initial state`() = runTest {
@@ -386,14 +405,17 @@ class TimelinePresenterTest {
             val oneReaction = persistentListOf(
                 EventReaction(
                     key = "❤️",
+                    shortcode = null,
                     senders = persistentListOf(alice, charlie)
                 ),
                 EventReaction(
                     key = "👍",
+                    shortcode = null,
                     senders = persistentListOf(alice, bob)
                 ),
                 EventReaction(
                     key = "🐶",
+                    shortcode = null,
                     senders = persistentListOf(charlie)
                 ),
             )
@@ -513,7 +535,7 @@ class TimelinePresenterTest {
             initialState.eventSink.invoke(TimelineEvent.FocusOnEvent(AN_EVENT_ID))
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
@@ -521,7 +543,7 @@ class TimelinePresenterTest {
             }
             skipItems(2)
             awaitItem().also { state ->
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID, forReadMarker = false))
                 assertThat(state.timelineItems).isNotEmpty()
             }
             initialState.eventSink.invoke(TimelineEvent.JumpToLive)
@@ -570,11 +592,11 @@ class TimelinePresenterTest {
 
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID, 0))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID, 0, forReadMarker = false))
             }
         }
     }
@@ -598,7 +620,7 @@ class TimelinePresenterTest {
             initialState.eventSink(TimelineEvent.FocusOnEvent(AN_EVENT_ID))
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
@@ -652,7 +674,7 @@ class TimelinePresenterTest {
 
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
 
             advanceUntilIdle()
@@ -660,7 +682,7 @@ class TimelinePresenterTest {
             assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Loading(AN_EVENT_ID))
 
             // The live timeline focuses in the thread root
-            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(A_THREAD_ID.asEventId()))
+            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(A_THREAD_ID.asEventId(), forReadMarker = false))
 
             // The thread is opened
             openThreadLambda.assertions()
@@ -711,7 +733,7 @@ class TimelinePresenterTest {
 
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
 
             advanceUntilIdle()
@@ -719,7 +741,7 @@ class TimelinePresenterTest {
             assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Loading(AN_EVENT_ID))
 
             // The live timeline focuses in the event directly since we are already in the thread
-            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID))
+            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(AN_EVENT_ID, forReadMarker = false))
 
             // The thread is not opened again
             openThreadLambda.assertions().isNeverCalled()
@@ -766,7 +788,7 @@ class TimelinePresenterTest {
 
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
 
             advanceUntilIdle()
@@ -774,7 +796,7 @@ class TimelinePresenterTest {
             assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Loading(AN_EVENT_ID))
 
             // The live timeline focuses in the event directly since we are already in the thread
-            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(A_THREAD_ID_2.asEventId()))
+            assertThat(awaitItem().focusRequestState).isEqualTo(FocusRequestState.Success(A_THREAD_ID_2.asEventId(), forReadMarker = false))
 
             // The other thread is opened
             openThreadLambda.assertions()
@@ -825,7 +847,7 @@ class TimelinePresenterTest {
 
             awaitItem().also { state ->
                 assertThat(state.focusedEventId).isEqualTo(AN_EVENT_ID)
-                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO))
+                assertThat(state.focusRequestState).isEqualTo(FocusRequestState.Requested(AN_EVENT_ID, Duration.ZERO, forReadMarker = false))
             }
 
             advanceUntilIdle()
@@ -1014,8 +1036,8 @@ class TimelinePresenterTest {
         timelineItemIndexer: TimelineItemIndexer = TimelineItemIndexer(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
-    ): TimelinePresenter {
-        return TimelinePresenter(
+    ): Presenter<TimelineState> {
+        val realPresenter = TimelinePresenter(
             timelineItemsFactoryCreator = aTimelineItemsFactoryCreator(),
             room = room,
             dispatchers = testCoroutineDispatchers(),
@@ -1034,5 +1056,15 @@ class TimelinePresenterTest {
             analyticsService = FakeAnalyticsService(),
             liveLocationShareManager = liveLocationShareManager,
         )
+        // TimelinePresenter reads LocalContext (SC addition); provide a real one here since this
+        // test drives the presenter directly via molecule, without the Compose UI test harness
+        // that would normally supply it.
+        return Presenter {
+            var result: TimelineState? = null
+            CompositionLocalProvider(LocalContext provides ApplicationProvider.getApplicationContext()) {
+                result = realPresenter.present()
+            }
+            result!!
+        }
     }
 }

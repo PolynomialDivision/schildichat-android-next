@@ -13,6 +13,9 @@ package io.element.android.features.messages.impl
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
+import chat.schildi.lib.preferences.LocalScPreferencesStore
+import chat.schildi.lib.preferences.NotExactlyACompositionLocal
+import chat.schildi.lib.preferences.PreviewScPreferencesStore
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.longClick
@@ -65,11 +68,11 @@ import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.ui.strings.CommonStrings
-import io.element.android.tests.testutils.EnsureCalledOnceWithTwoParamsAndResult
+import io.element.android.tests.testutils.EnsureCalledOnceWithThreeParamsAndResult
 import io.element.android.tests.testutils.EnsureNeverCalled
 import io.element.android.tests.testutils.EnsureNeverCalledWithParam
+import io.element.android.tests.testutils.EnsureNeverCalledWithThreeParamsAndResult
 import io.element.android.tests.testutils.EnsureNeverCalledWithTwoParams
-import io.element.android.tests.testutils.EnsureNeverCalledWithTwoParamsAndResult
 import io.element.android.tests.testutils.EventsRecorder
 import io.element.android.tests.testutils.assertNoNodeWithText
 import io.element.android.tests.testutils.clickOn
@@ -79,13 +82,24 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.pressBack
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.setSafeContent
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import org.junit.Before
 import org.junit.Test
 import org.robolectric.annotation.Config
 import kotlin.time.Duration.Companion.milliseconds
 
 class MessagesViewTest : RobolectricTest() {
+    @Before
+    fun setUp() {
+        // MessagesView reads from the global LocalScPreferencesStore; without this, it falls
+        // back to the crashing FakeScPreferencesStore sentinel meant to catch missing providers
+        // in production.
+        LocalScPreferencesStore = NotExactlyACompositionLocal(PreviewScPreferencesStore)
+    }
+
+
     @Test
     fun `clicking on back invoke expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>(expectEvents = false)
@@ -159,9 +173,10 @@ class MessagesViewTest : RobolectricTest() {
             eventSink = eventsRecorder
         )
         val timelineItem = state.timelineState.timelineItems.first()
-        val callback = EnsureCalledOnceWithTwoParamsAndResult(
+        val callback = EnsureCalledOnceWithThreeParamsAndResult<Boolean, TimelineItem, ImmutableList<TimelineItem.Event>?, Boolean>(
             expectedParam1 = true,
             expectedParam2 = timelineItem,
+            expectedParam3 = null,
             result = true,
         )
         setMessagesView(
@@ -684,7 +699,8 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
     state: MessagesState,
     onBackClick: () -> Unit = EnsureNeverCalled(),
     onRoomDetailsClick: () -> Unit = EnsureNeverCalled(),
-    onEventClick: (isLive: Boolean, event: TimelineItem.Event) -> Boolean = EnsureNeverCalledWithTwoParamsAndResult(),
+    onEventClick: (isLive: Boolean, event: TimelineItem.Event, mediaGroupEvents: ImmutableList<TimelineItem.Event>?) -> Boolean =
+        EnsureNeverCalledWithThreeParamsAndResult(),
     onUserDataClick: (UserId) -> Unit = EnsureNeverCalledWithParam(),
     onLinkClick: (String, Boolean) -> Unit = EnsureNeverCalledWithTwoParams(),
     onSendLocationClick: () -> Unit = EnsureNeverCalled(),

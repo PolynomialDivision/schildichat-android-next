@@ -49,8 +49,14 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+// Robolectric is required here since building real timeline items (via TimelineItemsFactory)
+// goes through the SC message-formatting layer (MessageFormatDefaults), which needs a real
+// android.util.Patterns implementation, not the empty unit-test stub jar.
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class PinnedMessagesListPresenterTest {
     @Test
     fun `present - initial state`() = runTest {
