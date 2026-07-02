@@ -8,7 +8,10 @@
 
 package io.element.android.libraries.push.impl
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
+import chat.schildi.lib.preferences.ScAppStateStore
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -633,6 +636,7 @@ class DefaultPushServiceTest {
             testPush = testPush,
             userPushStoreFactory = userPushStoreFactory,
             pushProviders = pushProviders,
+            scAppStateStore = FakeScAppStateStore(),
             getCurrentPushProvider = getCurrentPushProvider,
             sessionObserver = sessionObserver,
             pushClientSecretStore = pushClientSecretStore,
@@ -641,4 +645,23 @@ class DefaultPushServiceTest {
             serviceUnregisteredHandler = serviceUnregisteredHandler,
         )
     }
+}
+
+private class FakeScAppStateStore : ScAppStateStore {
+    // DefaultPushService never reads this directly (only setPushDistributor), so a stub that
+    // throws if actually touched is enough here, without pulling in a real DataStore backend.
+    override val store: DataStore<Preferences> = object : DataStore<Preferences> {
+        override val data get() = throw UnsupportedOperationException()
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences) = throw UnsupportedOperationException()
+    }
+    override suspend fun persistSpaceSelection(selection: List<String>) = Unit
+    override suspend fun loadInitialSpaceSelection(): List<String> = emptyList()
+    override suspend fun onPushReceived(provider: String?) = Unit
+    override suspend fun setPushGateway(gateway: String?) = Unit
+    override suspend fun setPushDistributor(distributor: String?, name: String?) = Unit
+    override suspend fun formatLastPushTs(): String = ""
+    override suspend fun lastPushProvider(): String = ""
+    override suspend fun lastPushGateway(): String = ""
+    override suspend fun lastPushDistributor(): String? = null
+    override suspend fun lastPushDistributorName(): String? = null
 }

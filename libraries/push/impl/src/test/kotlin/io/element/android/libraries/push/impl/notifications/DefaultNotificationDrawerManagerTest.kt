@@ -24,6 +24,7 @@ import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_THREAD_ID_2
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
+import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.ui.components.aMatrixUser
 import io.element.android.libraries.matrix.ui.media.test.FakeImageLoaderHolder
 import io.element.android.libraries.push.api.notifications.NotificationIdProvider
@@ -525,6 +526,7 @@ fun TestScope.createDefaultNotificationDrawerManager(
                 activeNotificationsProvider = activeNotificationsProvider,
             ),
             enterpriseService = enterpriseService,
+            buildMeta = aBuildMeta(),
             sessionStore = sessionStore,
             analyticsService = analyticsService,
         ),
