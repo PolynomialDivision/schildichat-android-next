@@ -65,5 +65,25 @@ interface SessionPreferencesStore {
     /** Cheap flag read, without loading the full [RoomNotificationChannelSettings]. */
     fun hasCustomRoomNotificationChannelSettings(roomId: RoomId): Flow<Boolean>
 
+    /**
+     * Records "now" as the last time [roomId]'s auto-created ("ordinary", i.e. not customized via
+     * [RoomNotificationChannelSettings]) notification channel handled a notification. Used to
+     * retire long-inactive ordinary channels; has no effect on a room's customized channel.
+     */
+    suspend fun recordOrdinaryRoomChannelNotified(roomId: RoomId)
+
+    /** Clears [roomId]'s recorded ordinary-channel last-notified timestamp, if any. */
+    suspend fun clearOrdinaryRoomChannelLastNotified(roomId: RoomId)
+
+    /**
+     * Every recorded ordinary-channel last-notified timestamp, keyed by the same room-id hash
+     * embedded in that room's channel id. Channel ids only carry a one-way hash of the room id, not
+     * the id itself, so a caller enumerating system channels can only look this up by that hash.
+     */
+    suspend fun getOrdinaryRoomChannelLastNotifiedByHash(): Map<String, Long>
+
+    /** Clears an ordinary-channel last-notified timestamp by the room-id hash embedded in its channel id. */
+    suspend fun clearOrdinaryRoomChannelLastNotifiedByHash(roomHash: String)
+
     suspend fun clear()
 }

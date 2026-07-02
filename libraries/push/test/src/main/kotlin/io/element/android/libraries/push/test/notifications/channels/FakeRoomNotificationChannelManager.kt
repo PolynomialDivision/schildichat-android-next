@@ -19,6 +19,7 @@ class FakeRoomNotificationChannelManager(
     private val onRoomNotificationSettingsChangedLambda: (SessionId, RoomId, String) -> Unit = { _, _, _ -> lambdaError() },
     private val pruneChannelsForSessionLambda: (SessionId, Set<RoomId>) -> Unit = { _, _ -> lambdaError() },
     private val clearAllChannelsForSessionLambda: (SessionId) -> Unit = { lambdaError() },
+    private val pruneInactiveOrdinaryChannelsLambda: (SessionId) -> Unit = { lambdaError() },
 ) : RoomNotificationChannelManager {
     override suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, noisy: Boolean): String =
         getChannelIdForRoomLambda(sessionId, roomId, roomDisplayName, noisy)
@@ -40,5 +41,9 @@ class FakeRoomNotificationChannelManager(
 
     override suspend fun clearAllChannelsForSession(sessionId: SessionId) {
         clearAllChannelsForSessionLambda(sessionId)
+    }
+
+    override suspend fun pruneInactiveOrdinaryChannels(sessionId: SessionId) {
+        pruneInactiveOrdinaryChannelsLambda(sessionId)
     }
 }

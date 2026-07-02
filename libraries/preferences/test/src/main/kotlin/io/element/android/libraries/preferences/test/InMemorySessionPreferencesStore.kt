@@ -8,6 +8,7 @@
 
 package io.element.android.libraries.preferences.test
 
+import io.element.android.libraries.androidutils.hash.hash
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.preferences.api.store.NotificationSound
 import io.element.android.libraries.preferences.api.store.RoomNotificationChannelSettings
@@ -38,10 +39,16 @@ class InMemorySessionPreferencesStore(
     private val doesCompressMedia = MutableStateFlow(doesCompressMedia)
     private val videoCompressionPreset = MutableStateFlow(videoCompressionPreset)
     private val roomNotificationChannelSettings = mutableMapOf<RoomId, MutableStateFlow<RoomNotificationChannelSettings?>>()
+
+    // Keyed by the same room-id hash used in channel ids (see DefaultRoomNotificationChannelManager),
+    // matching how the real store has to bridge RoomId <-> channel-id-embedded hash.
+    private val ordinaryRoomChannelLastNotified = mutableMapOf<String, Long>()
     var clearCallCount = 0
         private set
 
     private fun slotFor(roomId: RoomId) = roomNotificationChannelSettings.getOrPut(roomId) { MutableStateFlow(null) }
+
+    private fun roomHash(roomId: RoomId): String = roomId.value.hash().take(16)
 
     override suspend fun setSharePresence(enabled: Boolean) {
         isSharePresenceEnabled.tryEmit(enabled)
@@ -125,6 +132,25 @@ class InMemorySessionPreferencesStore(
     }
 
     override fun hasCustomRoomNotificationChannelSettings(roomId: RoomId): Flow<Boolean> = slotFor(roomId).map { it != null }
+
+    override suspend fun recordOrdinaryRoomChannelNotified(roomId: RoomId) {
+        ordinaryRoomChannelLastNotified[roomHash(roomId)] = System.currentTimeMillis()
+    }
+
+    override suspend fun clearOrdinaryRoomChannelLastNotified(roomId: RoomId) {
+        ordinaryRoomChannelLastNotified.remove(roomHash(roomId))
+    }
+
+    override suspend fun getOrdinaryRoomChannelLastNotifiedByHash(): Map<String, Long> = ordinaryRoomChannelLastNotified.toMap()
+
+    override suspend fun clearOrdinaryRoomChannelLastNotifiedByHash(roomHash: String) {
+        ordinaryRoomChannelLastNotified.remove(roomHash)
+    }
+
+    /** Test-only helper to backdate a room's ordinary-channel last-notified timestamp. */
+    fun givenOrdinaryRoomChannelLastNotified(roomId: RoomId, timestampMs: Long) {
+        ordinaryRoomChannelLastNotified[roomHash(roomId)] = timestampMs
+    }
 
     private fun defaultRoomNotificationChannelSettings() = RoomNotificationChannelSettings(
         sound = NotificationSound.SystemDefault,

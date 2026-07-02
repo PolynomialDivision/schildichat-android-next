@@ -193,12 +193,28 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         var prunedRooms: Pair<Any, Any>? = null
         val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
             pruneChannelsForSessionLambda = { sessionId, roomIds -> prunedRooms = sessionId to roomIds },
+            pruneInactiveOrdinaryChannelsLambda = { },
         )
         val service = createService(context, roomNotificationChannelManager = roomNotificationChannelManager)
 
         service.onAvailableRoomsChanged(sessionId = A_SESSION_ID, roomIds = setOf(A_ROOM_ID))
 
         assertThat(prunedRooms).isEqualTo(A_SESSION_ID to setOf(A_ROOM_ID))
+    }
+
+    @Test
+    fun `onAvailableRoomsChanged also prunes inactive ordinary channels`() = runTest {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        var prunedSession: Any? = null
+        val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
+            pruneChannelsForSessionLambda = { _, _ -> },
+            pruneInactiveOrdinaryChannelsLambda = { sessionId -> prunedSession = sessionId },
+        )
+        val service = createService(context, roomNotificationChannelManager = roomNotificationChannelManager)
+
+        service.onAvailableRoomsChanged(sessionId = A_SESSION_ID, roomIds = setOf(A_ROOM_ID))
+
+        assertThat(prunedSession).isEqualTo(A_SESSION_ID)
     }
 
     @Test
@@ -225,6 +241,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
             clearRoomChannelLambda = { _, _ -> },
             pruneChannelsForSessionLambda = { _, _ -> },
             clearAllChannelsForSessionLambda = { },
+            pruneInactiveOrdinaryChannelsLambda = { },
         ),
     ) = DefaultNotificationConversationService(
         context = context,

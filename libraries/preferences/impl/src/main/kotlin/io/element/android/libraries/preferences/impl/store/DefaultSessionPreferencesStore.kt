@@ -14,6 +14,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.element.android.libraries.androidutils.file.safeDelete
@@ -57,13 +58,23 @@ class DefaultSessionPreferencesStore(
 
     // Per-room keys are built on demand rather than declared statically: DataStore doesn't
     // require enumerable keys, and one room can't collide with another's hashed prefix.
-    private fun roomKeyPrefix(roomId: RoomId): String = "room_${roomId.value.hash().take(16)}_"
+    private fun roomHash(roomId: RoomId): String = roomId.value.hash().take(16)
+    private fun roomKeyPrefix(roomId: RoomId): String = roomKeyPrefixFromHash(roomHash(roomId))
+    private fun roomKeyPrefixFromHash(roomHash: String): String = "room_${roomHash}_"
     private fun roomHasCustomKey(roomId: RoomId) = booleanPreferencesKey("${roomKeyPrefix(roomId)}notifCustom")
     private fun roomSoundKey(roomId: RoomId) = stringPreferencesKey("${roomKeyPrefix(roomId)}notifSoundUri")
     private fun roomSoundDisplayNameKey(roomId: RoomId) = stringPreferencesKey("${roomKeyPrefix(roomId)}notifSoundDisplayName")
     private fun roomSoundVersionKey(roomId: RoomId) = intPreferencesKey("${roomKeyPrefix(roomId)}notifSoundVersion")
     private fun roomPriorityKey(roomId: RoomId) = stringPreferencesKey("${roomKeyPrefix(roomId)}notifPriority")
     private fun roomPreviewKey(roomId: RoomId) = booleanPreferencesKey("${roomKeyPrefix(roomId)}notifPreview")
+
+    // Ordinary (auto-created, uncustomized) per-room channels only need a last-notified timestamp,
+    // used for retention pruning. Looked up by raw room-id hash too, since a channel id enumerated
+    // from the system only carries that hash, not the original RoomId.
+    private val ordinaryLastNotifiedKeySuffix = "notifOrdinaryLastNotified"
+    private fun roomOrdinaryLastNotifiedKey(roomId: RoomId) = longPreferencesKey("${roomKeyPrefix(roomId)}$ordinaryLastNotifiedKeySuffix")
+    private fun roomOrdinaryLastNotifiedKeyFromHash(roomHash: String) =
+        longPreferencesKey("${roomKeyPrefixFromHash(roomHash)}$ordinaryLastNotifiedKeySuffix")
 
     private val dataStoreFile = storeFile(context, sessionId)
     private val store = PreferenceDataStoreFactory.create(
@@ -171,6 +182,31 @@ class DefaultSessionPreferencesStore(
 
     override fun hasCustomRoomNotificationChannelSettings(roomId: RoomId): Flow<Boolean> {
         return get(roomHasCustomKey(roomId)) { false }
+    }
+
+    override suspend fun recordOrdinaryRoomChannelNotified(roomId: RoomId) {
+        update(roomOrdinaryLastNotifiedKey(roomId), System.currentTimeMillis())
+    }
+
+    override suspend fun clearOrdinaryRoomChannelLastNotified(roomId: RoomId) {
+        store.edit { prefs -> prefs.remove(roomOrdinaryLastNotifiedKey(roomId)) }
+    }
+
+    override suspend fun getOrdinaryRoomChannelLastNotifiedByHash(): Map<String, Long> {
+        val suffix = "_$ordinaryLastNotifiedKeySuffix"
+        return store.data.first().asMap().entries
+            .mapNotNull { (key, value) ->
+                if (key.name.startsWith("room_") && key.name.endsWith(suffix) && value is Long) {
+                    key.name.removePrefix("room_").removeSuffix(suffix) to value
+                } else {
+                    null
+                }
+            }
+            .toMap()
+    }
+
+    override suspend fun clearOrdinaryRoomChannelLastNotifiedByHash(roomHash: String) {
+        store.edit { prefs -> prefs.remove(roomOrdinaryLastNotifiedKeyFromHash(roomHash)) }
     }
 
     private fun Preferences.toRoomNotificationChannelSettings(roomId: RoomId): RoomNotificationChannelSettings? {
