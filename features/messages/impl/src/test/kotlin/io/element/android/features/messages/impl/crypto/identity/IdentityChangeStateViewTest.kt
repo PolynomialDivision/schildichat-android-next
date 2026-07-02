@@ -16,6 +16,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import chat.schildi.lib.preferences.LocalScPreferencesStore
+import chat.schildi.lib.preferences.NotExactlyACompositionLocal
+import chat.schildi.lib.preferences.PreviewScPreferencesStore
 import io.element.android.libraries.designsystem.components.avatar.anAvatarData
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
@@ -24,11 +27,20 @@ import io.element.android.libraries.matrix.ui.room.RoomMemberIdentityStateChange
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.EventsRecorder
 import io.element.android.tests.testutils.clickOn
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class IdentityChangeStateViewTest {
+    @Before
+    fun setUp() {
+        // IdentityChangeStateView reads from the global LocalScPreferencesStore; without this,
+        // it falls back to the crashing FakeScPreferencesStore sentinel meant to catch missing
+        // providers in production.
+        LocalScPreferencesStore = NotExactlyACompositionLocal(PreviewScPreferencesStore)
+    }
+
     @Test
     fun `show and resolve pin violation`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<IdentityChangeEvent>()

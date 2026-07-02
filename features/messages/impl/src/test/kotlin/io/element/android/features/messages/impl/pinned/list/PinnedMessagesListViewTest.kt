@@ -20,6 +20,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import chat.schildi.lib.preferences.LocalScPreferencesStore
+import chat.schildi.lib.preferences.NotExactlyACompositionLocal
+import chat.schildi.lib.preferences.PreviewScPreferencesStore
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.anActionListState
 import io.element.android.features.messages.impl.timeline.aTimelineItemList
@@ -34,11 +37,20 @@ import io.element.android.tests.testutils.ensureCalledOnceWithParam
 import io.element.android.tests.testutils.pressBack
 import io.element.android.tests.testutils.setSafeContent
 import io.element.android.wysiwyg.link.Link
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PinnedMessagesListViewTest {
+    @Before
+    fun setUp() {
+        // PinnedMessagesListView reads from the global LocalScPreferencesStore; without this,
+        // it falls back to the crashing FakeScPreferencesStore sentinel meant to catch missing
+        // providers in production.
+        LocalScPreferencesStore = NotExactlyACompositionLocal(PreviewScPreferencesStore)
+    }
+
     @Test
     fun `clicking on back calls the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<PinnedMessagesListEvent>(expectEvents = false)

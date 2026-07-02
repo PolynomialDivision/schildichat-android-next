@@ -10,6 +10,8 @@
 
 package io.element.android.features.messages.impl
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.PinUnpinAction
@@ -28,6 +30,7 @@ import io.element.android.features.messages.impl.pinned.banner.aLoadedPinnedMess
 import io.element.android.features.messages.impl.threads.list.aThreadListItem
 import io.element.android.features.messages.impl.timeline.FakeMarkAsFullyRead
 import io.element.android.features.messages.impl.timeline.MarkAsFullyRead
+import io.element.android.features.messages.impl.timeline.ScReadState
 import io.element.android.features.messages.impl.timeline.TimelineController
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.aTimelineState
@@ -44,9 +47,14 @@ import io.element.android.features.messages.test.timeline.FakeHtmlConverterProvi
 import io.element.android.features.messages.test.timeline.voicemessages.composer.FakeDefaultVoiceMessageComposerPresenterFactory
 import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationState
+import chat.schildi.lib.preferences.AbstractScPref
+import chat.schildi.lib.preferences.ScPref
+import chat.schildi.lib.preferences.ScPreferencesStore
 import io.element.android.libraries.androidutils.clipboard.FakeClipboardHelper
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
+import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
@@ -113,7 +121,10 @@ import io.element.android.tests.testutils.testWithLifecycleOwner
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -378,6 +389,7 @@ class MessagesPresenterTest {
                     fileSize = 4 * 1024 * 1024L,
                     caption = null,
                     formattedCaption = null,
+                    formattedCaptionSc = null,
                     isEdited = false,
                     mediaSource = MediaSource(AN_AVATAR_URL),
                     thumbnailSource = null,
@@ -419,6 +431,7 @@ class MessagesPresenterTest {
                     fileSize = 50 * 1024 * 1024L,
                     caption = null,
                     formattedCaption = null,
+                    formattedCaptionSc = null,
                     isEdited = false,
                     duration = 10.milliseconds,
                     mediaSource = MediaSource(AN_AVATAR_URL),
@@ -462,6 +475,7 @@ class MessagesPresenterTest {
                     caption = null,
                     isEdited = false,
                     formattedCaption = null,
+                    formattedCaptionSc = null,
                     mediaSource = MediaSource(AN_AVATAR_URL),
                     thumbnailSource = MediaSource(AN_AVATAR_URL),
                     formattedFileSize = "10 MB",
@@ -1220,7 +1234,7 @@ class MessagesPresenterTest {
         )
         presenter.testWithLifecycleOwner {
             val initialState = awaitItem()
-            initialState.eventSink(MessagesEvent.MarkAsFullyReadAndExit)
+            initialState.eventSink(MessagesEvent.MarkAsFullyReadAndExit(aScReadState()))
 
             runCurrent()
 
@@ -1244,7 +1258,7 @@ class MessagesPresenterTest {
         )
         presenter.testWithLifecycleOwner {
             val initialState = awaitItem()
-            initialState.eventSink(MessagesEvent.MarkAsFullyReadAndExit)
+            initialState.eventSink(MessagesEvent.MarkAsFullyReadAndExit(aScReadState()))
 
             runCurrent()
 
@@ -1382,6 +1396,8 @@ class MessagesPresenterTest {
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
+        sessionPreferencesStore: SessionPreferencesStore = InMemorySessionPreferencesStore(),
+        scPreferencesStore: ScPreferencesStore = FakeScPreferencesStore(),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
     ): MessagesPresenter {
         return MessagesPresenter(
@@ -1412,8 +1428,32 @@ class MessagesPresenterTest {
             featureFlagService = featureFlagService,
             addRecentEmoji = addRecentEmoji,
             markAsFullyRead = markAsFullyRead,
+            sessionPreferencesStore = sessionPreferencesStore,
+            scPreferencesStore = scPreferencesStore,
             liveLocationShareManager = liveLocationShareManager,
             sessionCoroutineScope = backgroundScope,
         )
     }
+
+    private fun aScReadState() = ScReadState(
+        lastReadMarkerIndex = mutableIntStateOf(Integer.MAX_VALUE),
+        lastReadMarkerId = mutableStateOf(null),
+        readMarkerToSet = mutableStateOf(null),
+        sawUnreadLine = mutableStateOf(true),
+        fullyReadEventId = mutableStateOf(null),
+    )
+}
+
+private class FakeScPreferencesStore(
+    private val values: Map<String, Any?> = emptyMap(),
+) : ScPreferencesStore {
+    override suspend fun <T> setSetting(scPref: ScPref<T>, value: T) = Unit
+    override suspend fun <T> setSettingTypesafe(scPref: ScPref<T>, value: Any?) = Unit
+    override fun <T> settingFlow(scPref: ScPref<T>): Flow<T> = flowOf(getCachedOrDefaultValue(scPref))
+    override fun <T> combinedSettingValueAndEnabledFlow(transform: ((ScPref<*>) -> Any?, (ScPref<*>) -> Boolean) -> T): Flow<T> = emptyFlow()
+    override fun isEnabledFlow(scPref: AbstractScPref): Flow<Boolean> = flowOf(true)
+    @Suppress("UNCHECKED_CAST")
+    override fun <T> getCachedOrDefaultValue(scPref: ScPref<T>): T = (values[scPref.sKey] as? T) ?: scPref.defaultValue
+    override suspend fun reset() = Unit
+    override suspend fun prefetch() = Unit
 }

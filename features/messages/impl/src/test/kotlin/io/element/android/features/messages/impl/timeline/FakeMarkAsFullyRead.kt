@@ -11,12 +11,13 @@ package io.element.android.features.messages.impl.timeline
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.tests.testutils.lambda.lambdaError
 
 class FakeMarkAsFullyRead(
     private val invokeResult: (RoomId, EventId) -> Unit = { _, _ -> lambdaError() },
 ) : MarkAsFullyRead {
-    override suspend fun invoke(roomId: RoomId, eventId: EventId): Result<Unit> {
+    override suspend fun invoke(roomId: RoomId, eventId: EventId, withReadReceipt: ReceiptType?): Result<Unit> {
         return runCatchingExceptions { invokeResult(roomId, eventId) }
     }
 }

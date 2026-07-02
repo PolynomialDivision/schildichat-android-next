@@ -23,7 +23,13 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.test
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+// Robolectric is required here since building real timeline items goes through the SC
+// message-formatting layer (MessageFormatDefaults), which needs a real android.util.Patterns
+// implementation, not the empty unit-test stub jar.
+@RunWith(RobolectricTestRunner::class)
 class ThreadsListPresenterTest {
     @Test
     fun `present - initial state`() = runTest {
