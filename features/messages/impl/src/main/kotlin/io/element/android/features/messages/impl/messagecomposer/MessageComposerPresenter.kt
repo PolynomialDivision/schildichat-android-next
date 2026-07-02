@@ -33,6 +33,7 @@ import im.vector.app.features.analytics.plan.Composer
 import im.vector.app.features.analytics.plan.Interaction
 import io.element.android.features.location.api.LocationService
 import io.element.android.features.messages.impl.MessagesNavigator
+import io.element.android.features.messages.impl.R
 import io.element.android.features.messages.impl.attachments.Attachment
 import io.element.android.features.messages.impl.attachments.Attachment.Media
 import io.element.android.features.messages.impl.attachments.preview.error.sendAttachmentError
@@ -43,6 +44,7 @@ import io.element.android.features.messages.impl.timeline.TimelineController
 import io.element.android.features.messages.impl.utils.TextPillificationHelper
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
@@ -101,6 +103,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import kotlin.time.Duration.Companion.seconds
 import io.element.android.libraries.core.mimetype.MimeTypes.Any as AnyMimeTypes
@@ -133,6 +136,7 @@ class MessageComposerPresenter(
     private val mediaOptimizationConfigProvider: MediaOptimizationConfigProvider,
     private val notificationConversationService: NotificationConversationService,
     private val slashCommandService: SlashCommandService,
+    private val dispatchers: CoroutineDispatchers,
 ) : Presenter<MessageComposerState> {
     @AssistedFactory
     interface Factory {
@@ -177,8 +181,10 @@ class MessageComposerPresenter(
             canShareLocation.value = locationService.isServiceAvailable()
         }
 
-        val galleryMediaPicker = mediaPickerProvider.registerGalleryPicker { uri, mimeType ->
-            handlePickedMedia(uri, mimeType)
+        val galleryMediaPicker = mediaPickerProvider.registerMultipleGalleryPicker { uris ->
+            localCoroutineScope.launch {
+                handlePickedMediaList(uris)
+            }
         }
         val filesPicker = mediaPickerProvider.registerFilePicker(AnyMimeTypes) { uri, mimeType ->
             handlePickedMedia(uri, mimeType ?: MimeTypes.OctetStream, sendAsFile = true)
@@ -621,6 +627,40 @@ class MessageComposerPresenter(
 
         // Reset composer since the attachment will be sent in a separate flow
         messageComposerContext.composerMode = MessageComposerMode.Normal
+    }
+
+    private suspend fun handlePickedMediaList(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        // Convert URIs off the main thread: for a large selection, probing mime type/file size/name
+        // for every item can add up even though each individual probe is lightweight.
+        val (attachments, skippedCount) = withContext(dispatchers.io) {
+            val attachments = mutableListOf<Attachment.Media>()
+            var skippedCount = 0
+            for (uri in uris) {
+                if (!localMediaFactory.isUriReadable(uri)) {
+                    skippedCount++
+                    continue
+                }
+                val localMedia = localMediaFactory.createFromUri(
+                    uri = uri,
+                    mimeType = null,
+                    name = null,
+                    formattedFileSize = null,
+                )
+                attachments += Attachment.Media(localMedia)
+            }
+            attachments to skippedCount
+        }
+        if (skippedCount > 0) {
+            snackbarDispatcher.post(SnackbarMessage(R.string.screen_room_attachment_picker_error_skipped_items))
+        }
+        if (attachments.isNotEmpty()) {
+            val inReplyToEventId = (messageComposerContext.composerMode as? MessageComposerMode.Reply)?.eventId
+            navigator.navigateToPreviewAttachments(attachments.toImmutableList(), inReplyToEventId)
+
+            // Reset composer since the attachment(s) will be sent in a separate flow
+            messageComposerContext.composerMode = MessageComposerMode.Normal
+        }
     }
 
     private suspend fun sendMedia(

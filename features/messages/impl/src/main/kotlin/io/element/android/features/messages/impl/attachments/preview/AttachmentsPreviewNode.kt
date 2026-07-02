@@ -9,9 +9,7 @@
 package io.element.android.features.messages.impl.attachments.preview
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import chat.schildi.theme.ForcedDarkScTheme
 import com.bumble.appyx.core.modality.BuildContext
@@ -20,8 +18,6 @@ import com.bumble.appyx.core.plugin.Plugin
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.annotations.ContributesNode
-import io.element.android.compound.colors.SemanticColorsLightDark
-import io.element.android.compound.theme.ForcedDarkElementTheme
 import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.features.messages.impl.attachments.Attachment
 import io.element.android.libraries.architecture.NodeInputs
@@ -31,6 +27,7 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.mediaviewer.api.local.LocalMediaRenderer
+import kotlinx.collections.immutable.ImmutableList
 
 @ContributesNode(RoomScope::class)
 @AssistedInject
@@ -43,7 +40,7 @@ class AttachmentsPreviewNode(
     private val enterpriseService: EnterpriseService,
 ) : Node(buildContext, plugins = plugins) {
     data class Inputs(
-        val attachment: Attachment,
+        val attachments: ImmutableList<Attachment>,
         val timelineMode: Timeline.Mode,
         val inReplyToEventId: EventId?,
     ) : NodeInputs
@@ -55,7 +52,7 @@ class AttachmentsPreviewNode(
     }
 
     private val presenter = presenterFactory.create(
-        attachment = inputs.attachment,
+        attachments = inputs.attachments,
         timelineMode = inputs.timelineMode,
         onDoneListener = onDoneListener,
         inReplyToEventId = inputs.inReplyToEventId,
@@ -70,7 +67,7 @@ class AttachmentsPreviewNode(
         ForcedDarkElementTheme(
             colors = colors,
         ) {
-        */
+         */
         ForcedDarkScTheme {
             val state = presenter.present()
             AttachmentsPreviewView(

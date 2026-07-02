@@ -14,19 +14,26 @@ import io.element.android.features.messages.impl.attachments.preview.imageeditor
 import io.element.android.features.messages.impl.attachments.video.MediaOptimizationSelectorState
 import io.element.android.libraries.mediaupload.api.MediaUploadInfo
 import io.element.android.libraries.textcomposer.model.TextEditorState
+import kotlinx.collections.immutable.ImmutableList
 
 data class AttachmentsPreviewState(
     val attachment: Attachment,
+    val attachments: ImmutableList<Attachment>,
+    val focusedIndex: Int,
     val imageEditorState: AttachmentImageEditorState?,
     val canEditImage: Boolean,
     val isApplyingImageEdits: Boolean,
     val displayImageEditError: Boolean,
     val sendActionState: SendActionState,
+    val sendProgress: SendProgress?,
     val textEditorState: TextEditorState,
     val mediaOptimizationSelectorState: MediaOptimizationSelectorState,
     val displayFileTooLargeError: Boolean,
     val eventSink: (AttachmentsPreviewEvent) -> Unit,
 )
+
+/** Progress through a multi-attachment batch send, e.g. item 2 of 5 currently being processed/uploaded. */
+data class SendProgress(val currentIndex: Int, val total: Int)
 
 @Immutable
 sealed interface SendActionState {

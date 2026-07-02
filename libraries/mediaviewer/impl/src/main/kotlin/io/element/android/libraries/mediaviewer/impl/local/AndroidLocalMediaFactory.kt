@@ -118,6 +118,10 @@ class AndroidLocalMediaFactory(
         )
     }
 
+    override fun isUriReadable(uri: Uri): Boolean {
+        return tryOrNull { context.contentResolver.openInputStream(uri)?.use { } } != null
+    }
+
     private fun resolveMimeType(
         uri: Uri,
         mimeType: String?,

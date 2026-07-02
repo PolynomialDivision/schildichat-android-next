@@ -15,6 +15,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Immutable
 import io.element.android.libraries.core.mimetype.MimeTypes
 
+/** Maximum number of items a user can select at once in the multi-select gallery picker. */
+const val MAX_MULTI_SELECT_GALLERY_ITEMS = 20
+
 @Immutable
 sealed interface PickerType<Input, Output> {
     fun getContract(): ActivityResultContract<Input, Output>
@@ -29,6 +32,13 @@ sealed interface PickerType<Input, Output> {
 
     data object ImageAndVideo : PickerType<PickVisualMediaRequest, Uri?> {
         override fun getContract() = ActivityResultContracts.PickVisualMedia()
+        override fun getDefaultRequest(): PickVisualMediaRequest {
+            return PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+        }
+    }
+
+    data class ImageAndVideoMultiple(val maxItems: Int = MAX_MULTI_SELECT_GALLERY_ITEMS) : PickerType<PickVisualMediaRequest, List<Uri>> {
+        override fun getContract() = ActivityResultContracts.PickMultipleVisualMedia(maxItems)
         override fun getDefaultRequest(): PickVisualMediaRequest {
             return PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
         }

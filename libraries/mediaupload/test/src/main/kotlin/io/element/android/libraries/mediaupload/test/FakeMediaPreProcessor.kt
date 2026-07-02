@@ -31,6 +31,9 @@ class FakeMediaPreProcessor(
     var cleanUpCallCount = 0
         private set
 
+    /** The [Uri]s passed to [process], in call order. */
+    val processedUris = mutableListOf<Uri>()
+
     /** The [MediaOptimizationConfig] passed to the most recent [process] call, or `null` if it was never called. */
     var lastMediaOptimizationConfig: MediaOptimizationConfig? = null
         private set
@@ -55,6 +58,7 @@ class FakeMediaPreProcessor(
     ): Result<MediaUploadInfo> = simulateLongTask {
         processLatch?.await()
         processCallCount++
+        processedUris += uri
         lastMediaOptimizationConfig = mediaOptimizationConfig
         result
     }

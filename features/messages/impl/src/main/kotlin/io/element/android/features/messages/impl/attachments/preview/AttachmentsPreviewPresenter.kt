@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -28,9 +29,11 @@ import io.element.android.features.messages.impl.attachments.preview.imageeditor
 import io.element.android.features.messages.impl.attachments.video.MediaOptimizationSelectorPresenter
 import io.element.android.features.messages.impl.attachments.video.MediaOptimizationSelectorState
 import io.element.android.features.messages.impl.attachments.video.VideoCompressionPresetSelector
+import io.element.android.features.messages.impl.attachments.video.VideoUploadEstimation
 import io.element.android.libraries.androidutils.file.TemporaryUriDeleter
 import io.element.android.libraries.androidutils.file.safeDelete
 import io.element.android.libraries.androidutils.hash.hash
+import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.coroutine.firstInstanceOf
@@ -48,9 +51,13 @@ import io.element.android.libraries.mediaupload.api.allFiles
 import io.element.android.libraries.preferences.api.store.VideoCompressionPreset
 import io.element.android.libraries.textcomposer.model.TextEditorState
 import io.element.android.libraries.textcomposer.model.rememberMarkdownTextEditorState
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,7 +66,7 @@ import java.io.File
 
 @AssistedInject
 class AttachmentsPreviewPresenter(
-    @Assisted private val attachment: Attachment,
+    @Assisted private val attachments: ImmutableList<Attachment>,
     @Assisted private val onDoneListener: OnDoneListener,
     @Assisted private val timelineMode: Timeline.Mode,
     @Assisted private val inReplyToEventId: EventId?,
@@ -76,7 +83,7 @@ class AttachmentsPreviewPresenter(
     @AssistedFactory
     interface Factory {
         fun create(
-            attachment: Attachment,
+            attachments: ImmutableList<Attachment>,
             timelineMode: Timeline.Mode,
             onDoneListener: OnDoneListener,
             inReplyToEventId: EventId?,
@@ -85,8 +92,22 @@ class AttachmentsPreviewPresenter(
 
     private val mediaSender = mediaSenderFactory.create(timelineMode)
 
+    // Decided once, from the initial selection: a batch that's whittled down to one item via
+    // removal still uses the batch state machine (no per-item image editing support), rather than
+    // switching composable branches mid-lifetime.
+    private val isBatch = attachments.size > 1
+
     @Composable
     override fun present(): AttachmentsPreviewState {
+        return if (isBatch) {
+            presentBatch()
+        } else {
+            presentSingle(attachments.first())
+        }
+    }
+
+    @Composable
+    private fun presentSingle(attachment: Attachment): AttachmentsPreviewState {
         val coroutineScope = rememberCoroutineScope()
 
         val sendActionState = remember {
@@ -144,8 +165,8 @@ class AttachmentsPreviewPresenter(
                 }
                 val config = getAutoPreprocessMediaOptimizationConfig(
                     mediaAttachment = mediaAttachment,
-                    mediaOptimizationSelectorState = mediaOptimizationSelectorState,
-                ) ?: return@LaunchedEffect
+                    videoSizeEstimations = mediaOptimizationSelectorState.videoSizeEstimations,
+                )
                 preprocessMediaJob = coroutineScope.preProcessAttachment(
                     attachment = currentAttachment,
                     mediaOptimizationConfig = config,
@@ -251,7 +272,7 @@ class AttachmentsPreviewPresenter(
                     ongoingSendAttachmentJob.value?.cancel()
 
                     // Dismiss the screen
-                    dismiss(sendActionState, editedTempFile)
+                    dismissSingle(attachment, sendActionState, editedTempFile)
                 }
                 AttachmentsPreviewEvent.CancelAndClearSendState -> {
                     // Cancel media sending
@@ -352,16 +373,231 @@ class AttachmentsPreviewPresenter(
                 AttachmentsPreviewEvent.ClearImageEditError -> {
                     displayImageEditError = false
                 }
+                is AttachmentsPreviewEvent.RemoveAttachment, is AttachmentsPreviewEvent.FocusAttachment -> {
+                    // Not applicable to a single-attachment preview.
+                }
             }
         }
 
         return AttachmentsPreviewState(
             attachment = currentAttachment,
+            attachments = persistentListOf(currentAttachment),
+            focusedIndex = 0,
             imageEditorState = imageEditorState,
             canEditImage = canEditImage,
             isApplyingImageEdits = isApplyingImageEdits,
             displayImageEditError = displayImageEditError,
             sendActionState = sendActionState.value,
+            sendProgress = null,
+            textEditorState = textEditorState,
+            mediaOptimizationSelectorState = mediaOptimizationSelectorState,
+            displayFileTooLargeError = displayFileTooLargeError,
+            eventSink = ::handleEvent,
+        )
+    }
+
+    /**
+     * Batch preview/send flow for 2+ selected attachments. Image/video editing isn't supported here
+     * (see plan notes): no existing precedent in this codebase for keying per-item edit state across
+     * a variable-size batch, so the crop/rotate/flip UI is simply hidden ([canEditImage] forced false).
+     *
+     * Media optimization is also simplified relative to the single-item flow: instead of running one
+     * live [MediaOptimizationSelectorPresenter] per item and broadcasting user choices to all of them,
+     * a single presenter tracks the *focused* item (driving the shared toggle/preset UI and its size
+     * estimate), and the resulting choice is applied uniformly to every item in the batch at send time.
+     *
+     * Unlike the single-item flow (which dismisses the screen once the one item is pre-processed, then
+     * uploads in the background), batch pre-processing runs, with visible progress and retry-on-failure,
+     * entirely on this screen; the screen only dismisses once every item has been pre-processed
+     * successfully, and the uploads then proceed sequentially in the background.
+     */
+    @Composable
+    private fun presentBatch(): AttachmentsPreviewState {
+        val coroutineScope = rememberCoroutineScope()
+
+        val sendActionState = remember { mutableStateOf<SendActionState>(SendActionState.Idle) }
+        val attachmentsList = remember { mutableStateListOf<Attachment>().apply { addAll(attachments) } }
+        var focusedIndex by remember { mutableStateOf(0) }
+        var batchCursor by remember { mutableStateOf(0) }
+        var sendProgress by remember { mutableStateOf<SendProgress?>(null) }
+        val readyMediaList = remember { mutableStateListOf<MediaUploadInfo>() }
+        val ongoingSendAttachmentJob = remember { mutableStateOf<Job?>(null) }
+
+        val markdownTextEditorState = rememberMarkdownTextEditorState(initialText = null, initialFocus = false)
+        val textEditorState by rememberUpdatedState(
+            TextEditorState.Markdown(markdownTextEditorState, isRoomEncrypted = null)
+        )
+
+        val safeFocusedIndex = focusedIndex.coerceIn(0, (attachmentsList.size - 1).coerceAtLeast(0))
+        val focusedAttachment = attachmentsList.getOrNull(safeFocusedIndex)
+        val focusedMediaAttachment = focusedAttachment as? Attachment.Media
+
+        val mediaOptimizationSelectorPresenter = focusedMediaAttachment?.let { media ->
+            remember(media.localMedia.uri) {
+                mediaOptimizationSelectorPresenterFactory.create(
+                    localMedia = media.localMedia,
+                    sendAsFile = media.sendAsFile,
+                )
+            }
+        }
+        val mediaOptimizationSelectorState = mediaOptimizationSelectorPresenter?.present() ?: emptyMediaOptimizationSelectorState()
+
+        val maxUploadSize = mediaOptimizationSelectorState.maxUploadSize.dataOrNull()
+        val videoSizeEstimations = mediaOptimizationSelectorState.videoSizeEstimations.dataOrNull()
+        val displayFileTooLargeError = when {
+            videoSizeEstimations != null -> videoSizeEstimations.none { it.canUpload }
+            maxUploadSize != null && focusedMediaAttachment != null -> {
+                val isImageFile = focusedMediaAttachment.localMedia.info.isImageAttachment()
+                val isVideoFile = focusedMediaAttachment.localMedia.info.mimeType.isMimeTypeVideo()
+                if (isImageFile || isVideoFile) {
+                    false
+                } else {
+                    val fileSize = focusedMediaAttachment.localMedia.info.fileSize ?: 0L
+                    maxUploadSize < fileSize
+                }
+            }
+            else -> false
+        }
+
+        suspend fun preProcessBatch(caption: String?) {
+            val total = attachmentsList.size
+            val sharedConfig = if (mediaOptimizationSelectorState.displayMediaSelectorViews == true) {
+                MediaOptimizationConfig(
+                    compressImages = mediaOptimizationSelectorState.isImageOptimizationEnabled == true,
+                    videoCompressionPreset = mediaOptimizationSelectorState.selectedVideoPreset ?: VideoCompressionPreset.STANDARD,
+                )
+            } else {
+                null
+            }
+            for (index in batchCursor until total) {
+                val mediaAttachment = attachmentsList[index] as? Attachment.Media ?: continue
+                sendProgress = SendProgress(currentIndex = index, total = total)
+                sendActionState.value = SendActionState.Sending.Processing(displayProgress = true)
+                val config = sharedConfig ?: getAutoPreprocessMediaOptimizationConfig(
+                    mediaAttachment = mediaAttachment,
+                    videoSizeEstimations = AsyncData.Uninitialized,
+                )
+                val result = mediaSender.preProcessMedia(
+                    uri = mediaAttachment.localMedia.uri,
+                    mimeType = mediaAttachment.localMedia.info.mimeType,
+                    mediaOptimizationConfig = config,
+                )
+                result.fold(
+                    onSuccess = { mediaUploadInfo ->
+                        readyMediaList.add(mediaUploadInfo)
+                        batchCursor = index + 1
+                    },
+                    onFailure = { error ->
+                        Timber.e(error, "Failed to pre-process media in batch")
+                        if (error is CancellationException) throw error
+                        sendActionState.value = SendActionState.Failure(error, null)
+                    }
+                )
+                if (sendActionState.value is SendActionState.Failure) return
+            }
+
+            // The whole batch is pre-processed: dismiss the screen and upload in the background,
+            // exactly like the single-item flow does once its one item is ready.
+            if (currentCoroutineContext().isActive) {
+                onDoneListener()
+            }
+            val mediaToUpload = readyMediaList.toList()
+            sessionCoroutineScope.launch(dispatchers.io) {
+                mediaToUpload.forEachIndexed { index, mediaUploadInfo ->
+                    sendActionState.value = SendActionState.Sending.Uploading(mediaUploadInfo)
+                    val itemCaption = caption.takeIf { index == mediaToUpload.lastIndex }
+                    runCatchingExceptions {
+                        mediaSender.sendPreProcessedMedia(
+                            mediaUploadInfo = mediaUploadInfo,
+                            caption = itemCaption,
+                            formattedCaption = null,
+                            inReplyToEventId = inReplyToEventId,
+                        ).getOrThrow()
+                    }.onFailure { error ->
+                        if (error is CancellationException) throw error
+                        Timber.e(error, "Failed to send attachment in batch")
+                    }
+                    // Whether it succeeded or failed, this screen is gone and there's no retry UI left
+                    // for it here (a failed send surfaces as a normal failed-event row in the room
+                    // timeline instead), so always release this item's temp files.
+                    cleanUp(mediaUploadInfo)
+                }
+                // Backstop sweep of the whole pre-processing cache, mirroring the single-item flow.
+                mediaSender.cleanUp()
+                sendActionState.value = SendActionState.Done
+            }
+        }
+
+        fun handleEvent(event: AttachmentsPreviewEvent) {
+            when (event) {
+                AttachmentsPreviewEvent.SendAttachment -> {
+                    val caption = markdownTextEditorState.getMessageMarkdown(permalinkBuilder)
+                        .takeIf { it.isNotEmpty() }
+                    ongoingSendAttachmentJob.value = coroutineScope.launch {
+                        preProcessBatch(caption)
+                    }
+                }
+                AttachmentsPreviewEvent.CancelAndDismiss -> {
+                    ongoingSendAttachmentJob.value?.cancel()
+                    ongoingSendAttachmentJob.value = null
+                    sendProgress = null
+                    // Nothing has been uploaded yet at this point (dismissal only happens post-preprocess),
+                    // so it's safe to sweep away every pending pre-processed file for the whole batch.
+                    mediaSender.cleanUp()
+                    attachmentsList.forEach { (it as? Attachment.Media)?.let { media -> temporaryUriDeleter.delete(media.localMedia.uri) } }
+                    sendActionState.value = SendActionState.Done
+                    onDoneListener()
+                }
+                AttachmentsPreviewEvent.CancelAndClearSendState -> {
+                    ongoingSendAttachmentJob.value?.let {
+                        it.cancel()
+                        ongoingSendAttachmentJob.value = null
+                    }
+                    sendActionState.value = SendActionState.Idle
+                }
+                is AttachmentsPreviewEvent.RemoveAttachment -> {
+                    if (sendActionState.value == SendActionState.Idle && event.index in attachmentsList.indices) {
+                        val removed = attachmentsList.removeAt(event.index)
+                        (removed as? Attachment.Media)?.let { temporaryUriDeleter.delete(it.localMedia.uri) }
+                        if (attachmentsList.isEmpty()) {
+                            onDoneListener()
+                        } else {
+                            focusedIndex = focusedIndex.coerceIn(0, attachmentsList.lastIndex)
+                            if (batchCursor > attachmentsList.size) {
+                                batchCursor = attachmentsList.size
+                            }
+                        }
+                    }
+                }
+                is AttachmentsPreviewEvent.FocusAttachment -> {
+                    if (event.index in attachmentsList.indices) {
+                        focusedIndex = event.index
+                    }
+                }
+                AttachmentsPreviewEvent.OpenImageEditor,
+                AttachmentsPreviewEvent.CloseImageEditor,
+                is AttachmentsPreviewEvent.UpdateImageCropRect,
+                AttachmentsPreviewEvent.RotateImageToTheLeft,
+                AttachmentsPreviewEvent.FlipImageHorizontally,
+                AttachmentsPreviewEvent.FlipImageVertically,
+                AttachmentsPreviewEvent.ResetImageEdits,
+                AttachmentsPreviewEvent.ApplyImageEdits,
+                AttachmentsPreviewEvent.ClearImageEditError -> {
+                    // Editing isn't supported for multi-attachment batches.
+                }
+            }
+        }
+
+        return AttachmentsPreviewState(
+            attachment = focusedAttachment ?: attachments.first(),
+            attachments = attachmentsList.toImmutableList(),
+            focusedIndex = safeFocusedIndex,
+            imageEditorState = null,
+            canEditImage = false,
+            isApplyingImageEdits = false,
+            displayImageEditError = false,
+            sendActionState = sendActionState.value,
+            sendProgress = sendProgress,
             textEditorState = textEditorState,
             mediaOptimizationSelectorState = mediaOptimizationSelectorState,
             displayFileTooLargeError = displayFileTooLargeError,
@@ -371,14 +607,14 @@ class AttachmentsPreviewPresenter(
 
     private suspend fun getAutoPreprocessMediaOptimizationConfig(
         mediaAttachment: Attachment.Media,
-        mediaOptimizationSelectorState: MediaOptimizationSelectorState,
-    ): MediaOptimizationConfig? {
+        videoSizeEstimations: AsyncData<ImmutableList<VideoUploadEstimation>>,
+    ): MediaOptimizationConfig {
         return if (mediaAttachment.sendAsFile) {
             // If we're sending the media as a file, we can skip image compression and we should select the highest video compression preset that still fits
             // the upload limit (if the estimations are available)
             val videoCompressionPreset = videoCompressionPresetSelector.selectBestVideoPreset(
                 expectedVideoPreset = VideoCompressionPreset.HIGH,
-                videoSizeEstimations = mediaOptimizationSelectorState.videoSizeEstimations,
+                videoSizeEstimations = videoSizeEstimations,
             ).dataOrNull() ?: VideoCompressionPreset.HIGH
 
             MediaOptimizationConfig(
@@ -436,7 +672,8 @@ class AttachmentsPreviewPresenter(
         )
     }
 
-    private fun dismiss(
+    private fun dismissSingle(
+        attachment: Attachment,
         sendActionState: MutableState<SendActionState>,
         editedTempFile: File?,
     ) {
@@ -503,3 +740,13 @@ class AttachmentsPreviewPresenter(
         }
     )
 }
+
+private fun emptyMediaOptimizationSelectorState() = MediaOptimizationSelectorState(
+    maxUploadSize = AsyncData.Uninitialized,
+    videoSizeEstimations = AsyncData.Uninitialized,
+    isImageOptimizationEnabled = null,
+    selectedVideoPreset = null,
+    displayMediaSelectorViews = false,
+    displayVideoPresetSelectorDialog = false,
+    eventSink = {},
+)

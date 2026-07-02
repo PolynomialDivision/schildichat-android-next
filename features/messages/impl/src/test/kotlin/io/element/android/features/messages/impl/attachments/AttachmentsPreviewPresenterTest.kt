@@ -865,6 +865,214 @@ class AttachmentsPreviewPresenterTest {
         }
     }
 
+    @Test
+    fun `present - batch send success sends one event per attachment in order, caption on the last one`() = runTest {
+        val sendImageResult =
+            lambdaRecorder { _: File, _: File?, _: ImageInfo, _: String?, _: String?, _: EventId? ->
+                Result.success(FakeMediaUploadHandler())
+            }
+        val room = FakeJoinedRoom(
+            liveTimeline = FakeTimeline().apply {
+                sendImageLambda = sendImageResult
+            },
+        )
+        val mediaPreProcessor = FakeMediaPreProcessor().apply { givenImageResult() }
+        val onDoneListener = lambdaRecorder<Unit> { }
+        val presenter = createBatchAttachmentsPreviewPresenter(
+            count = 3,
+            room = room,
+            mediaPreProcessor = mediaPreProcessor,
+            onDoneListener = { onDoneListener() },
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            assertThat(initialState.attachments).hasSize(3)
+            initialState.textEditorState.setMarkdown(A_CAPTION)
+            initialState.eventSink(AttachmentsPreviewEvent.SendAttachment)
+            val doneState = consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }.last()
+            assertThat(doneState.sendActionState).isEqualTo(SendActionState.Done)
+            onDoneListener.assertions().isCalledOnce()
+            assertThat(mediaPreProcessor.processCallCount).isEqualTo(3)
+            sendImageResult.assertions().isCalledExactly(3).withSequence(
+                listOf(any(), any(), any(), value(null), any(), any()),
+                listOf(any(), any(), any(), value(null), any(), any()),
+                listOf(any(), any(), any(), value(A_CAPTION), any(), any()),
+            )
+        }
+    }
+
+    @Test
+    fun `present - canEditImage is always false for a batch of attachments`() = runTest {
+        val presenter = createBatchAttachmentsPreviewPresenter(count = 2)
+        presenter.test {
+            val initialState = awaitItem()
+            assertThat(initialState.canEditImage).isFalse()
+            // Attempting to open the image editor is a no-op for a batch.
+            initialState.eventSink(AttachmentsPreviewEvent.OpenImageEditor)
+            ensureAllEventsConsumed()
+        }
+    }
+
+    @Test
+    fun `present - removing an attachment from a batch keeps the others`() = runTest {
+        val deleteCallback = lambdaRecorder<Uri?, Unit> {}
+        val presenter = createBatchAttachmentsPreviewPresenter(
+            count = 3,
+            temporaryUriDeleter = FakeTemporaryUriDeleter(deleteCallback),
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            assertThat(initialState.attachments).hasSize(3)
+            initialState.eventSink(AttachmentsPreviewEvent.RemoveAttachment(1))
+            val afterRemoval = awaitItem()
+            assertThat(afterRemoval.attachments).hasSize(2)
+            deleteCallback.assertions().isCalledOnce()
+        }
+    }
+
+    @Test
+    fun `present - removing the last attachment in a batch dismisses the screen`() = runTest {
+        val onDoneListener = lambdaRecorder<Unit> { }
+        val presenter = createBatchAttachmentsPreviewPresenter(
+            count = 2,
+            temporaryUriDeleter = FakeTemporaryUriDeleter { },
+            onDoneListener = { onDoneListener() },
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(AttachmentsPreviewEvent.RemoveAttachment(0))
+            val afterFirstRemoval = awaitItem()
+            assertThat(afterFirstRemoval.attachments).hasSize(1)
+            afterFirstRemoval.eventSink(AttachmentsPreviewEvent.RemoveAttachment(0))
+            onDoneListener.assertions().isCalledOnce()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - batch preprocessing failure allows retry which resumes from the failed item`() = runTest {
+        val processedUris = mutableListOf<Uri>()
+        var hasFailedOnce = false
+        val mediaPreProcessor = object : MediaPreProcessor {
+            override suspend fun process(
+                uri: Uri,
+                mimeType: String,
+                deleteOriginal: Boolean,
+                mediaOptimizationConfig: MediaOptimizationConfig,
+            ): Result<MediaUploadInfo> {
+                if (processedUris.size == 1 && !hasFailedOnce) {
+                    hasFailedOnce = true
+                    return Result.failure(Exception("boom"))
+                }
+                processedUris += uri
+                return Result.success(
+                    MediaUploadInfo.Image(
+                        file = File("image.jpg"),
+                        imageInfo = ImageInfo(
+                            height = 100,
+                            width = 100,
+                            mimetype = MimeTypes.Jpeg,
+                            size = 1000,
+                            thumbnailInfo = null,
+                            thumbnailSource = null,
+                            blurhash = null,
+                        ),
+                        thumbnailFile = null,
+                    )
+                )
+            }
+
+            override fun cleanUp() = Unit
+        }
+        val attachmentUris = (0 until 3).map { Uri.parse("file:///tmp/batch_$it.jpg") }
+        val presenter = createBatchAttachmentsPreviewPresenter(
+            uris = attachmentUris,
+            mediaPreProcessor = mediaPreProcessor,
+            room = FakeJoinedRoom(
+                liveTimeline = FakeTimeline().apply {
+                    sendImageLambda = { _, _, _, _, _, _ -> Result.success(FakeMediaUploadHandler()) }
+                }
+            ),
+            onDoneListener = OnDoneListener {},
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(AttachmentsPreviewEvent.SendAttachment)
+            val failureState = consumeItemsUntilPredicate { it.sendActionState is SendActionState.Failure }.last()
+            assertThat(failureState.sendActionState).isInstanceOf(SendActionState.Failure::class.java)
+
+            // Retry: the already-succeeded first item must not be re-processed.
+            failureState.eventSink(AttachmentsPreviewEvent.SendAttachment)
+            consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }
+
+            assertThat(processedUris).containsExactlyElementsIn(attachmentUris).inOrder()
+        }
+    }
+
+    @Test
+    fun `present - cancelling a batch cleans up every pending item and only sweeps once`() = runTest {
+        val deleteCallback = lambdaRecorder<Uri?, Unit> {}
+        val mediaPreProcessor = FakeMediaPreProcessor()
+        val presenter = createBatchAttachmentsPreviewPresenter(
+            count = 3,
+            mediaPreProcessor = mediaPreProcessor,
+            temporaryUriDeleter = FakeTemporaryUriDeleter(deleteCallback),
+            onDoneListener = OnDoneListener {},
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(AttachmentsPreviewEvent.CancelAndDismiss)
+            assertThat(awaitItem().sendActionState).isEqualTo(SendActionState.Done)
+            deleteCallback.assertions().isCalledExactly(3)
+            assertThat(mediaPreProcessor.cleanUpCallCount).isEqualTo(1)
+        }
+    }
+
+    private fun TestScope.createBatchAttachmentsPreviewPresenter(
+        count: Int = 3,
+        uris: List<Uri> = (0 until count).map { Uri.parse("file:///tmp/batch_$it.jpg") },
+        room: JoinedRoom = FakeJoinedRoom(),
+        mediaPreProcessor: MediaPreProcessor = FakeMediaPreProcessor().apply { givenImageResult() },
+        temporaryUriDeleter: TemporaryUriDeleter = FakeTemporaryUriDeleter(),
+        onDoneListener: OnDoneListener = OnDoneListener { lambdaError() },
+    ): AttachmentsPreviewPresenter {
+        val attachments = uris.map { uri -> aMediaAttachment(aLocalMedia(uri = uri, mediaInfo = anImageMediaInfo())) }
+        return AttachmentsPreviewPresenter(
+            attachments = persistentListOf(*attachments.toTypedArray()),
+            onDoneListener = onDoneListener,
+            mediaSenderFactory = MediaSenderFactory { timelineMode ->
+                DefaultMediaSender(
+                    preProcessor = mediaPreProcessor,
+                    room = room,
+                    timelineMode = timelineMode,
+                    mediaOptimizationConfigProvider = {
+                        MediaOptimizationConfig(compressImages = true, videoCompressionPreset = VideoCompressionPreset.STANDARD)
+                    }
+                )
+            },
+            permalinkBuilder = FakePermalinkBuilder(),
+            temporaryUriDeleter = temporaryUriDeleter,
+            attachmentImageEditor = FakeAttachmentImageEditor { Result.failure(Exception("Editing isn't supported for batches")) },
+            sessionCoroutineScope = this,
+            dispatchers = testCoroutineDispatchers(),
+            mediaOptimizationSelectorPresenterFactory = FakeMediaOptimizationSelectorPresenterFactory {
+                MediaOptimizationSelectorState(
+                    maxUploadSize = AsyncData.Uninitialized,
+                    videoSizeEstimations = AsyncData.Uninitialized,
+                    isImageOptimizationEnabled = null,
+                    selectedVideoPreset = null,
+                    displayMediaSelectorViews = false,
+                    displayVideoPresetSelectorDialog = false,
+                    eventSink = {},
+                )
+            },
+            videoCompressionPresetSelector = VideoCompressionPresetSelector(),
+            timelineMode = Timeline.Mode.Live,
+            inReplyToEventId = null,
+            mediaOptimizationConfigProvider = FakeMediaOptimizationConfigProvider(),
+        )
+    }
+
     private fun TestScope.createAttachmentsPreviewPresenter(
         localMedia: LocalMedia = aLocalMedia(
             uri = mockMediaUrl,
@@ -902,7 +1110,7 @@ class AttachmentsPreviewPresenterTest {
         videoCompressionPresetSelector: VideoCompressionPresetSelector = VideoCompressionPresetSelector(),
     ): AttachmentsPreviewPresenter {
         return AttachmentsPreviewPresenter(
-            attachment = aMediaAttachment(localMedia, sendAsFile = sendAsFile),
+            attachments = persistentListOf(aMediaAttachment(localMedia, sendAsFile = sendAsFile)),
             onDoneListener = onDoneListener,
             mediaSenderFactory = MediaSenderFactory { timelineMode ->
                 DefaultMediaSender(

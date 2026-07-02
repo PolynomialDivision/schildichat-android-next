@@ -27,6 +27,17 @@ class PickerTypeTest {
     }
 
     @Test
+    fun `ImageAndVideoMultiple - assert types`() {
+        val pickerType = PickerType.ImageAndVideoMultiple()
+        assertThat(pickerType.getContract()).isInstanceOf(ActivityResultContracts.PickMultipleVisualMedia::class.java)
+        assertThat(pickerType.getDefaultRequest().mediaType).isEqualTo(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+        assertThat(pickerType.maxItems).isEqualTo(20)
+
+        val customPickerType = PickerType.ImageAndVideoMultiple(maxItems = 5)
+        assertThat(customPickerType.maxItems).isEqualTo(5)
+    }
+
+    @Test
     fun `File - assert types`() {
         val pickerType = PickerType.File()
         assertThat(pickerType.getContract()).isInstanceOf(ActivityResultContracts.GetContent::class.java)

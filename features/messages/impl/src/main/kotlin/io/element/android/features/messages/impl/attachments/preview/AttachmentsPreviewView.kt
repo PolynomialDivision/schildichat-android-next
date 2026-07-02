@@ -11,6 +11,8 @@ package io.element.android.features.messages.impl.attachments.preview
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -21,16 +23,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -77,6 +92,7 @@ import io.element.android.libraries.ui.utils.formatter.rememberFileSizeFormatter
 import io.element.android.wysiwyg.display.TextDisplay
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.launch
 
 /**
  * Ref: https://www.figma.com/design/zftpgS6LjiczobJZ1GUNpt/Updates-to-Media---File-Upload?node-id=51-3514
@@ -188,6 +204,7 @@ fun AttachmentsPreviewView(
     }
     AttachmentSendStateView(
         sendActionState = state.sendActionState,
+        sendProgress = state.sendProgress,
         isApplyingImageEdits = state.isApplyingImageEdits,
         displayImageEditError = state.displayImageEditError,
         onDismissImageEditError = { state.eventSink(AttachmentsPreviewEvent.ClearImageEditError) },
@@ -199,12 +216,18 @@ fun AttachmentsPreviewView(
 @Composable
 private fun AttachmentSendStateView(
     sendActionState: SendActionState,
+    sendProgress: SendProgress?,
     isApplyingImageEdits: Boolean,
     displayImageEditError: Boolean,
     onDismissImageEditError: () -> Unit,
     onDismissClick: () -> Unit,
     onRetryClick: () -> Unit
 ) {
+    val preparingText = if (sendProgress != null) {
+        stringResource(R.string.screen_media_upload_preview_processing_progress, sendProgress.currentIndex + 1, sendProgress.total)
+    } else {
+        stringResource(CommonStrings.common_preparing)
+    }
     when {
         isApplyingImageEdits -> {
             ProgressDialog(
@@ -226,7 +249,7 @@ private fun AttachmentSendStateView(
                 if (sendActionState.displayProgress) {
                     ProgressDialog(
                         type = ProgressDialogType.Indeterminate,
-                        text = stringResource(CommonStrings.common_preparing),
+                        text = preparingText,
                         showCancelButton = true,
                         onDismissRequest = onDismissClick,
                     )
@@ -269,9 +292,13 @@ private fun AttachmentPreviewContent(
                 .weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            when (val attachment = state.attachment) {
-                is Attachment.Media -> {
-                    localMediaRenderer.Render(attachment.localMedia)
+            if (state.attachments.size > 1) {
+                BatchAttachmentPreviewPager(state = state, localMediaRenderer = localMediaRenderer)
+            } else {
+                when (val attachment = state.attachment) {
+                    is Attachment.Media -> {
+                        localMediaRenderer.Render(attachment.localMedia)
+                    }
                 }
             }
         }
@@ -304,6 +331,110 @@ private fun AttachmentPreviewContent(
                 .height(IntrinsicSize.Min)
                 .imePadding(),
         )
+    }
+}
+
+@Composable
+private fun BatchAttachmentPreviewPager(
+    state: AttachmentsPreviewState,
+    localMediaRenderer: LocalMediaRenderer,
+) {
+    val attachments = state.attachments
+    val pagerState = rememberPagerState(initialPage = state.focusedIndex) { attachments.size }
+    val coroutineScope = rememberCoroutineScope()
+    val canRemove = state.sendActionState == SendActionState.Idle
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            state.eventSink(AttachmentsPreviewEvent.FocusAttachment(page))
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                val attachment = attachments.getOrNull(page) as? Attachment.Media ?: return@HorizontalPager
+                val isVideo = attachment.localMedia.info.mimeType.isMimeTypeVideo()
+                val pageDescription = stringResource(
+                    if (isVideo) R.string.a11y_media_group_video else R.string.a11y_media_group_image,
+                    page + 1,
+                    attachments.size,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics { contentDescription = pageDescription },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    localMediaRenderer.Render(attachment.localMedia)
+                }
+            }
+            if (canRemove) {
+                IconButton(
+                    onClick = { state.eventSink(AttachmentsPreviewEvent.RemoveAttachment(pagerState.currentPage)) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                ) {
+                    Icon(
+                        imageVector = CompoundIcons.Close(),
+                        contentDescription = stringResource(CommonStrings.action_remove),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+        AttachmentThumbnailStrip(
+            attachments = attachments,
+            focusedIndex = pagerState.currentPage,
+            onThumbnailClick = { index -> coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+        )
+    }
+}
+
+@Composable
+private fun AttachmentThumbnailStrip(
+    attachments: ImmutableList<Attachment>,
+    focusedIndex: Int,
+    onThumbnailClick: (Int) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(ElementTheme.colors.bgCanvasDefault)
+            .padding(vertical = 8.dp, horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        itemsIndexed(attachments) { index, attachment ->
+            if (attachment !is Attachment.Media) return@itemsIndexed
+            val isSelected = index == focusedIndex
+            val isVideo = attachment.localMedia.info.mimeType.isMimeTypeVideo()
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(ElementTheme.colors.bgSubtlePrimary)
+                    .let {
+                        if (isSelected) {
+                            it.border(2.dp, ElementTheme.colors.borderInteractivePrimary, RoundedCornerShape(8.dp))
+                        } else {
+                            it
+                        }
+                    }
+                    .niceClickable { onThumbnailClick(index) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (isVideo) CompoundIcons.PlaySolid() else CompoundIcons.Image(),
+                    contentDescription = null,
+                    tint = ElementTheme.colors.iconSecondary,
+                )
+            }
+        }
     }
 }
 

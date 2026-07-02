@@ -8,4 +8,6 @@
     <string name="a11y_media_group_image">Image %1$d of %2$d</string>
     <string name="a11y_media_group_video">Video %1$d of %2$d</string>
     <string name="screen_room_timeline_media_group_more_overlay">+%1$d</string>
+    <string name="screen_media_upload_preview_processing_progress">Processing %1$d of %2$d</string>
+    <string name="screen_room_attachment_picker_error_skipped_items">Some items couldn\'t be added</string>
 </resources>

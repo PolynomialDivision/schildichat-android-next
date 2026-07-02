@@ -62,6 +62,8 @@ open class AttachmentsPreviewStateProvider : PreviewParameterProvider<Attachment
                     displayVideoPresetSelectorDialog = true,
                 )
             ),
+            aBatchAttachmentsPreviewState(),
+            aBatchAttachmentsPreviewState(sendActionState = SendActionState.Sending.Processing(displayProgress = true), sendProgress = SendProgress(1, 3)),
         )
 }
 
@@ -72,20 +74,53 @@ fun anAttachmentsPreviewState(
     imageEditorState: AttachmentImageEditorState? = null,
     mediaOptimizationSelectorState: MediaOptimizationSelectorState = aMediaOptimisationSelectorState(),
     displayFileTooLargeError: Boolean = false,
-) = AttachmentsPreviewState(
-    attachment = Attachment.Media(
+): AttachmentsPreviewState {
+    val attachment = Attachment.Media(
         localMedia = LocalMedia("file://path".toUri(), mediaInfo),
-    ),
-    imageEditorState = imageEditorState,
-    canEditImage = true,
-    isApplyingImageEdits = false,
-    displayImageEditError = false,
-    sendActionState = sendActionState,
-    textEditorState = textEditorState,
-    mediaOptimizationSelectorState = mediaOptimizationSelectorState,
-    displayFileTooLargeError = displayFileTooLargeError,
-    eventSink = {}
-)
+    )
+    return AttachmentsPreviewState(
+        attachment = attachment,
+        attachments = persistentListOf(attachment),
+        focusedIndex = 0,
+        imageEditorState = imageEditorState,
+        canEditImage = true,
+        isApplyingImageEdits = false,
+        displayImageEditError = false,
+        sendActionState = sendActionState,
+        sendProgress = null,
+        textEditorState = textEditorState,
+        mediaOptimizationSelectorState = mediaOptimizationSelectorState,
+        displayFileTooLargeError = displayFileTooLargeError,
+        eventSink = {}
+    )
+}
+
+fun aBatchAttachmentsPreviewState(
+    sendActionState: SendActionState = SendActionState.Idle,
+    sendProgress: SendProgress? = null,
+    focusedIndex: Int = 0,
+): AttachmentsPreviewState {
+    val attachments = persistentListOf(
+        Attachment.Media(localMedia = LocalMedia("file://path1".toUri(), anImageMediaInfo())),
+        Attachment.Media(localMedia = LocalMedia("file://path2".toUri(), aVideoMediaInfo())),
+        Attachment.Media(localMedia = LocalMedia("file://path3".toUri(), anImageMediaInfo())),
+    )
+    return AttachmentsPreviewState(
+        attachment = attachments[focusedIndex],
+        attachments = attachments,
+        focusedIndex = focusedIndex,
+        imageEditorState = null,
+        canEditImage = false,
+        isApplyingImageEdits = false,
+        displayImageEditError = false,
+        sendActionState = sendActionState,
+        sendProgress = sendProgress,
+        textEditorState = aTextEditorStateMarkdown(),
+        mediaOptimizationSelectorState = aMediaOptimisationSelectorState(),
+        displayFileTooLargeError = false,
+        eventSink = {}
+    )
+}
 
 fun aMediaUploadInfo(
     filePath: String = "file://path",
