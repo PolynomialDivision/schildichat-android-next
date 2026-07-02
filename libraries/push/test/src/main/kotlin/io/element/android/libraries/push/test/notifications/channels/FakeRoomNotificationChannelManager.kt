@@ -13,16 +13,16 @@ import io.element.android.libraries.push.api.notifications.RoomNotificationChann
 import io.element.android.tests.testutils.lambda.lambdaError
 
 class FakeRoomNotificationChannelManager(
-    private val getChannelIdForRoomLambda: (SessionId, RoomId, String, Boolean) -> String = { _, _, _, _ -> lambdaError() },
+    private val getChannelIdForRoomLambda: (SessionId, RoomId, String, Boolean, Boolean) -> String = { _, _, _, _, _ -> lambdaError() },
     private val shouldShowMessagePreviewLambda: (SessionId, RoomId) -> Boolean = { _, _ -> true },
     private val clearRoomChannelLambda: (SessionId, RoomId) -> Unit = { _, _ -> lambdaError() },
-    private val onRoomNotificationSettingsChangedLambda: (SessionId, RoomId, String) -> Unit = { _, _, _ -> lambdaError() },
+    private val onRoomNotificationSettingsChangedLambda: (SessionId, RoomId, String, Boolean) -> Unit = { _, _, _, _ -> lambdaError() },
     private val pruneChannelsForSessionLambda: (SessionId, Set<RoomId>) -> Unit = { _, _ -> lambdaError() },
     private val clearAllChannelsForSessionLambda: (SessionId) -> Unit = { lambdaError() },
     private val pruneInactiveOrdinaryChannelsLambda: (SessionId) -> Unit = { lambdaError() },
 ) : RoomNotificationChannelManager {
-    override suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, noisy: Boolean): String =
-        getChannelIdForRoomLambda(sessionId, roomId, roomDisplayName, noisy)
+    override suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean, noisy: Boolean): String =
+        getChannelIdForRoomLambda(sessionId, roomId, roomDisplayName, isDm, noisy)
 
     override suspend fun shouldShowMessagePreview(sessionId: SessionId, roomId: RoomId): Boolean =
         shouldShowMessagePreviewLambda(sessionId, roomId)
@@ -31,8 +31,8 @@ class FakeRoomNotificationChannelManager(
         clearRoomChannelLambda(sessionId, roomId)
     }
 
-    override suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String) {
-        onRoomNotificationSettingsChangedLambda(sessionId, roomId, roomDisplayName)
+    override suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean) {
+        onRoomNotificationSettingsChangedLambda(sessionId, roomId, roomDisplayName, isDm)
     }
 
     override suspend fun pruneChannelsForSession(sessionId: SessionId, roomIds: Set<RoomId>) {

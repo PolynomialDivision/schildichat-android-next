@@ -34,7 +34,11 @@ import io.element.android.libraries.push.api.notifications.RoomNotificationChann
 import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
 import kotlinx.coroutines.CoroutineScope
 
-private const val ROOM_NOTIFICATION_CHANNEL_ID_BASE = "ROOM_NOTIFICATION_CHANNEL"
+// Bumped to _V2: NotificationChannel.setGroup() can only be set at creation, so filing per-room
+// channels under "Private chats"/"Rooms" requires a fresh id space. The old, ungrouped family is
+// deleted wholesale the next time a session's channels are touched - see deleteLegacyRoomChannels.
+private const val ROOM_NOTIFICATION_CHANNEL_ID_BASE = "ROOM_NOTIFICATION_CHANNEL_V2"
+private const val LEGACY_ROOM_NOTIFICATION_CHANNEL_ID_BASE = "ROOM_NOTIFICATION_CHANNEL"
 
 @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.O)
 private fun supportNotificationChannels() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -49,7 +53,7 @@ class DefaultRoomNotificationChannelManager(
     private val sessionPreferencesStoreFactory: SessionPreferencesStoreFactory,
     @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
 ) : RoomNotificationChannelManager {
-    override suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, noisy: Boolean): String {
+    override suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean, noisy: Boolean): String {
         // An MDM-managed channel always wins over a per-room customization, same as
         // NotificationChannels.getChannelIdForMessage: this only ever applies to the noisy path,
         // the silent channel is never enterprise-overridden.
@@ -58,7 +62,7 @@ class DefaultRoomNotificationChannelManager(
         }
         val settings = sessionStore(sessionId).getRoomNotificationChannelSettings(roomId)
         if (settings != null) {
-            return ensureRoomChannel(sessionId, roomId, roomDisplayName, settings)
+            return ensureRoomChannel(sessionId, roomId, roomDisplayName, isDm, settings)
         }
         if (!noisy) {
             // See the class doc: only ever promote an uncustomized room to its own channel from a
@@ -66,7 +70,7 @@ class DefaultRoomNotificationChannelManager(
             // get permanently stuck at whatever importance its first (possibly silent) event implied.
             return notificationChannels.getChannelIdForMessage(sessionId, noisy)
         }
-        return ensureOrdinaryRoomChannel(sessionId, roomId, roomDisplayName)
+        return ensureOrdinaryRoomChannel(sessionId, roomId, roomDisplayName, isDm)
     }
 
     override suspend fun shouldShowMessagePreview(sessionId: SessionId, roomId: RoomId): Boolean {
@@ -78,13 +82,13 @@ class DefaultRoomNotificationChannelManager(
         deleteRoomChannels(sessionId, roomId, keepId = null)
     }
 
-    override suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String) {
+    override suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean) {
         val settings = sessionStore(sessionId).getRoomNotificationChannelSettings(roomId)
         if (settings == null) {
             // Settings were just cleared: no version to keep, remove every channel we ever created.
             deleteRoomChannels(sessionId, roomId, keepId = null)
         } else {
-            val currentId = ensureRoomChannel(sessionId, roomId, roomDisplayName, settings)
+            val currentId = ensureRoomChannel(sessionId, roomId, roomDisplayName, isDm, settings)
             deleteRoomChannels(sessionId, roomId, keepId = currentId)
         }
     }
@@ -101,10 +105,27 @@ class DefaultRoomNotificationChannelManager(
                 notificationManager.deleteNotificationChannel(id)
             }
         }
+        deleteLegacyRoomChannels(sessionId)
+    }
+
+    /**
+     * One-time cleanup for the pre-channel-group room channel family (no "_V2" suffix): those are
+     * permanently superseded, since NotificationChannel.setGroup() can't be applied retroactively.
+     * Piggybacks on the existing pruneChannelsForSession cadence rather than a dedicated migration
+     * step, since it's already called routinely (app resume) for every session.
+     */
+    private fun deleteLegacyRoomChannels(sessionId: SessionId) {
+        val legacyPrefix = legacyRoomChannelSessionPrefix(sessionId)
+        for (channel in notificationManager.notificationChannels) {
+            if (channel.id.startsWith(legacyPrefix)) {
+                notificationManager.deleteNotificationChannel(channel.id)
+            }
+        }
     }
 
     override suspend fun clearAllChannelsForSession(sessionId: SessionId) {
         if (!supportNotificationChannels()) return
+        deleteLegacyRoomChannels(sessionId)
         val prefix = roomChannelSessionPrefix(sessionId)
         for (channel in notificationManager.notificationChannels) {
             if (channel.id.startsWith(prefix)) {
@@ -166,12 +187,13 @@ class DefaultRoomNotificationChannelManager(
         sessionId: SessionId,
         roomId: RoomId,
         roomDisplayName: String,
+        isDm: Boolean,
         settings: RoomNotificationChannelSettings,
     ): String {
         if (!supportNotificationChannels()) return notificationChannels.getChannelIdForMessage(sessionId, noisy = true)
         val id = roomChannelId(sessionId, roomId, settings.channelVersion)
         if (notificationManager.getNotificationChannel(id) == null) {
-            notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, settings))
+            notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, isDm, settings))
         }
         return id
     }
@@ -184,11 +206,12 @@ class DefaultRoomNotificationChannelManager(
         sessionId: SessionId,
         roomId: RoomId,
         roomDisplayName: String,
+        isDm: Boolean,
     ): String {
         if (!supportNotificationChannels()) return notificationChannels.getChannelIdForMessage(sessionId, noisy = true)
         val id = roomChannelId(sessionId, roomId, version = 0)
         if (notificationManager.getNotificationChannel(id) == null) {
-            notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, ordinaryChannelDefaultSettings()))
+            notificationManager.createNotificationChannel(buildRoomChannel(id, sessionId, roomId, roomDisplayName, isDm, ordinaryChannelDefaultSettings()))
         }
         sessionStore(sessionId).recordOrdinaryRoomChannelNotified(roomId)
         return id
@@ -199,6 +222,7 @@ class DefaultRoomNotificationChannelManager(
         sessionId: SessionId,
         roomId: RoomId,
         roomDisplayName: String,
+        isDm: Boolean,
         settings: RoomNotificationChannelSettings,
     ): NotificationChannelCompat {
         val importance = when (settings.priority) {
@@ -214,6 +238,7 @@ class DefaultRoomNotificationChannelManager(
             .setVibrationEnabled(true)
             .setLightsEnabled(true)
             .setLightColor(accentColor)
+            .setGroup(if (isDm) PRIVATE_CHATS_CHANNEL_GROUP_ID else ROOMS_CHANNEL_GROUP_ID)
             // Lets Android group this under "Conversations" in system settings and surface the
             // Priority toggle scoped to this one room, rather than the whole shared channel.
             // The conversationId must match the shortcut's id exactly, since that's how system
@@ -275,6 +300,9 @@ class DefaultRoomNotificationChannelManager(
 
         private fun roomChannelSessionPrefix(sessionId: SessionId): String =
             "${ROOM_NOTIFICATION_CHANNEL_ID_BASE}_${sessionId.value.hash().take(ROOM_HASH_LENGTH)}_"
+
+        private fun legacyRoomChannelSessionPrefix(sessionId: SessionId): String =
+            "${LEGACY_ROOM_NOTIFICATION_CHANNEL_ID_BASE}_${sessionId.value.hash().take(ROOM_HASH_LENGTH)}_"
 
         private fun roomChannelBaseId(sessionId: SessionId, roomId: RoomId): String =
             "${roomChannelSessionPrefix(sessionId)}${roomId.value.hash().take(ROOM_HASH_LENGTH)}"

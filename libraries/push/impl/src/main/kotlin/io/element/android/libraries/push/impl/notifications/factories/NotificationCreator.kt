@@ -160,6 +160,7 @@ class DefaultNotificationCreator(
                 sessionId = roomInfo.sessionId,
                 roomId = roomInfo.roomId,
                 roomDisplayName = roomInfo.roomDisplayName,
+                isDm = roomInfo.isDm,
                 noisy = roomInfo.shouldBing,
             )
         }
