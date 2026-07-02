@@ -31,4 +31,10 @@ interface LocalMediaFactory {
         name: String?,
         formattedFileSize: String?
     ): LocalMedia
+
+    /**
+     * Returns whether [uri] can currently be opened for reading, without decoding its full contents.
+     * Used to skip unreadable items (e.g. a revoked grant) out of a multi-selection instead of failing the whole batch.
+     */
+    fun isUriReadable(uri: Uri): Boolean
 }

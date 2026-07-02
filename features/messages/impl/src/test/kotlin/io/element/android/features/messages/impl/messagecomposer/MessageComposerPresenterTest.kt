@@ -23,6 +23,7 @@ import io.element.android.features.location.api.LocationService
 import io.element.android.features.location.test.FakeLocationService
 import io.element.android.features.messages.impl.FakeMessagesNavigator
 import io.element.android.features.messages.impl.MessagesNavigator
+import io.element.android.features.messages.impl.R
 import io.element.android.features.messages.impl.attachments.Attachment
 import io.element.android.features.messages.impl.draft.ComposerDraftService
 import io.element.android.features.messages.impl.draft.FakeComposerDraftService
@@ -109,6 +110,7 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.test
+import io.element.android.tests.testutils.testCoroutineDispatchers
 import io.element.android.tests.testutils.waitForPredicate
 import io.mockk.mockk
 import kotlinx.collections.immutable.ImmutableList
@@ -128,7 +130,10 @@ class MessageComposerPresenterTest : RobolectricTest() {
     val warmUpRule = WarmUpRule()
 
     private val pickerProvider = FakePickerProvider().apply {
-        givenResult(mockk()) // Uri is not available in JVM, so the only way to have a non-null Uri is using Mockk
+        // Uri is not available in JVM, so the only way to have a non-null Uri is using Mockk
+        val uri = mockk<Uri>()
+        givenResult(uri)
+        givenMultipleResult(listOf(uri))
     }
     private val mediaPreProcessor = FakeMediaPreProcessor()
     private val snackbarDispatcher = SnackbarDispatcher()
@@ -714,6 +719,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         presenter.test {
             val initialState = awaitFirstItem()
             initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            advanceUntilIdle()
             onPreviewAttachmentLambda.assertions().isCalledOnce()
         }
     }
@@ -753,6 +759,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         presenter.test {
             val initialState = awaitFirstItem()
             initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            advanceUntilIdle()
             onPreviewAttachmentLambda.assertions().isCalledOnce()
         }
     }
@@ -762,12 +769,78 @@ class MessageComposerPresenterTest : RobolectricTest() {
         val presenter = createPresenter()
         with(pickerProvider) {
             givenResult(null) // Simulate a user canceling the flow
+            givenMultipleResult(emptyList()) // Simulate a user canceling the flow
             givenMimeType(MimeTypes.Images)
         }
         presenter.test {
             val initialState = awaitFirstItem()
             initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
             // No crashes here, otherwise it fails
+        }
+    }
+
+    @Test
+    fun `present - Pick several images from gallery navigates with all of them in order`() = runTest {
+        val uris = listOf(mockk<Uri>(), mockk<Uri>(), mockk<Uri>())
+        var capturedAttachments: ImmutableList<Attachment>? = null
+        val onPreviewAttachmentLambda = lambdaRecorder { attachments: ImmutableList<Attachment>, _: EventId? -> capturedAttachments = attachments }
+        val navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda)
+        val presenter = createPresenter(navigator = navigator)
+        pickerProvider.givenMultipleResult(uris)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            advanceUntilIdle()
+            onPreviewAttachmentLambda.assertions().isCalledOnce()
+        }
+        val attachments = capturedAttachments!!
+        assertThat(attachments).hasSize(3)
+        assertThat(attachments.map { (it as Attachment.Media).localMedia.uri }).isEqualTo(uris)
+    }
+
+    @Test
+    fun `present - Pick images with one unreadable Uri skips it, still sends the valid ones and warns the user`() = runTest {
+        val readableUri1 = mockk<Uri>()
+        val unreadableUri = mockk<Uri>()
+        val readableUri2 = mockk<Uri>()
+        localMediaFactory.unreadableUris = setOf(unreadableUri)
+        var capturedAttachments: ImmutableList<Attachment>? = null
+        val onPreviewAttachmentLambda = lambdaRecorder { attachments: ImmutableList<Attachment>, _: EventId? -> capturedAttachments = attachments }
+        val navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda)
+        val freshSnackbarDispatcher = SnackbarDispatcher()
+        val presenter = createPresenter(navigator = navigator, snackbarDispatcher = freshSnackbarDispatcher)
+        pickerProvider.givenMultipleResult(listOf(readableUri1, unreadableUri, readableUri2))
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            advanceUntilIdle()
+            onPreviewAttachmentLambda.assertions().isCalledOnce()
+        }
+        val attachments = capturedAttachments!!
+        assertThat(attachments.map { (it as Attachment.Media).localMedia.uri }).isEqualTo(listOf(readableUri1, readableUri2))
+        freshSnackbarDispatcher.snackbarMessage.test {
+            assertThat(awaitItem()?.messageResId).isEqualTo(R.string.screen_room_attachment_picker_error_skipped_items)
+        }
+    }
+
+    @Test
+    fun `present - Pick images that are all unreadable does not navigate but warns the user`() = runTest {
+        val unreadableUri1 = mockk<Uri>()
+        val unreadableUri2 = mockk<Uri>()
+        localMediaFactory.unreadableUris = setOf(unreadableUri1, unreadableUri2)
+        val onPreviewAttachmentLambda = lambdaRecorder<ImmutableList<Attachment>, EventId?, Unit>(ensureNeverCalled = true) { _, _ -> }
+        val navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda)
+        val freshSnackbarDispatcher = SnackbarDispatcher()
+        val presenter = createPresenter(navigator = navigator, snackbarDispatcher = freshSnackbarDispatcher)
+        pickerProvider.givenMultipleResult(listOf(unreadableUri1, unreadableUri2))
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            advanceUntilIdle()
+            // No navigation happened, otherwise it fails
+        }
+        freshSnackbarDispatcher.snackbarMessage.test {
+            assertThat(awaitItem()?.messageResId).isEqualTo(R.string.screen_room_attachment_picker_error_skipped_items)
         }
     }
 
@@ -1572,6 +1645,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         mediaOptimizationConfigProvider = mediaOptimizationConfigProvider,
         notificationConversationService = notificationConversationService,
         slashCommandService = slashCommandService,
+        dispatchers = testCoroutineDispatchers(),
     ).apply {
         isTesting = true
         showTextFormatting = isRichTextEditorEnabled

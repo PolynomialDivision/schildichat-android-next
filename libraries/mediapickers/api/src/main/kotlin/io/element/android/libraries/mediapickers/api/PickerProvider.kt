@@ -24,6 +24,11 @@ interface PickerProvider {
     ): PickerLauncher<PickVisualMediaRequest, Uri?>
 
     @Composable
+    fun registerMultipleGalleryPicker(
+        onResult: (uris: List<Uri>) -> Unit
+    ): PickerLauncher<PickVisualMediaRequest, List<Uri>>
+
+    @Composable
     fun registerFilePicker(
         mimeType: String,
         onResult: (uri: Uri?, mimeType: String?) -> Unit,

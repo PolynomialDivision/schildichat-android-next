@@ -25,6 +25,9 @@ class FakeLocalMediaFactory(
     var fallbackMimeType: String = MimeTypes.OctetStream
     var fallbackName: String = "File name"
     var fallbackFileSize = "0B"
+    var unreadableUris: Set<Uri> = emptySet()
+
+    override fun isUriReadable(uri: Uri): Boolean = uri !in unreadableUris
 
     override fun createFromMediaFile(mediaFile: MediaFile, mediaInfo: MediaInfo): LocalMedia {
         return aLocalMedia(uri = localMediaUri, mediaInfo = mediaInfo)

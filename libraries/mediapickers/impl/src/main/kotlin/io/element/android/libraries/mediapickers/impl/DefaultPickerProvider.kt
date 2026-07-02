@@ -81,6 +81,20 @@ class DefaultPickerProvider(
     }
 
     /**
+     * Remembers and returns a [PickerLauncher] for multiple gallery items, pictures or videos.
+     * [onResult] will be called with the list of selected files' [Uri]s, empty if nothing was selected.
+     */
+    @Composable
+    override fun registerMultipleGalleryPicker(onResult: (uris: List<Uri>) -> Unit): PickerLauncher<PickVisualMediaRequest, List<Uri>> {
+        // Tests and UI preview can't handle Contexts, so we might as well disable the whole picker
+        return if (LocalInspectionMode.current) {
+            NoOpPickerLauncher { onResult(emptyList()) }
+        } else {
+            rememberPickerLauncher(type = PickerType.ImageAndVideoMultiple()) { uris -> onResult(uris) }
+        }
+    }
+
+    /**
      * Remembers and returns a [PickerLauncher] for a file of a certain [mimeType] (any type of file, by default).
      * [onResult] will be called with either the selected file's [Uri] or `null` if nothing was selected.
      */
