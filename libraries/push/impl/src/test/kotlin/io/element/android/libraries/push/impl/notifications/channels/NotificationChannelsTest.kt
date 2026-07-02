@@ -60,13 +60,15 @@ class NotificationChannelsTest : RobolectricTest() {
         assertThat(captured.captured.map { it.id }).containsExactly(
             PRIVATE_CHATS_CHANNEL_GROUP_ID,
             ROOMS_CHANNEL_GROUP_ID,
-            OTHER_CHANNEL_GROUP_ID,
         )
     }
 
     @Test
     @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
-    fun `init - assigns silent, noisy and call channels to the Other group`() {
+    fun `init - leaves silent, noisy and call channels ungrouped`() {
+        // Regression test: these must not get a group of their own, since Android already buckets
+        // ungrouped channels under its own generic "Other" heading - a same-named group here would
+        // just show up as a confusing second "Other" section.
         val captured = mutableListOf<NotificationChannelCompat>()
         val notificationManager = mockk<NotificationManagerCompat>(relaxed = true) {
             every { notificationChannels } returns emptyList()
@@ -76,15 +78,18 @@ class NotificationChannelsTest : RobolectricTest() {
         createNotificationChannels(notificationManager = notificationManager)
 
         assertThat(captured).isNotEmpty()
-        assertThat(captured.all { it.group == OTHER_CHANNEL_GROUP_ID }).isTrue()
+        assertThat(captured.all { it.group == null }).isTrue()
     }
 
     @Test
     @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
-    fun `init - deletes the ungrouped legacy channel ids superseded by the versioned, grouped ones`() {
+    fun `init - deletes superseded legacy channel ids, including the short-lived grouped ones`() {
         val legacyIds = listOf(
             "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V2",
             "CALL_NOTIFICATION_CHANNEL_ID_V3",
+            // Briefly assigned to the now-removed "Other" group.
+            "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V3",
+            "CALL_NOTIFICATION_CHANNEL_ID_V4",
         )
         val legacyChannels = legacyIds.map { legacyId ->
             mockk<android.app.NotificationChannel>(relaxed = true) {
