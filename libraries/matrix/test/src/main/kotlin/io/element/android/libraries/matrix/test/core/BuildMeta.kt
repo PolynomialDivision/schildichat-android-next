@@ -10,8 +10,10 @@ package io.element.android.libraries.matrix.test.core
 
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.core.meta.BuildType
+import io.element.android.libraries.core.meta.ScBuildMeta
 
 fun aBuildMeta(
+    scBuildMeta: ScBuildMeta = ScBuildMeta(mainVersion = "", elementVersion = "", scVariant = null),
     buildType: BuildType = BuildType.DEBUG,
     isDebuggable: Boolean = true,
     applicationName: String = "",
@@ -27,6 +29,7 @@ fun aBuildMeta(
     flavorDescription: String = "",
     flavorShortDescription: String = "",
 ) = BuildMeta(
+    scBuildMeta = scBuildMeta,
     buildType = buildType,
     isDebuggable = isDebuggable,
     applicationName = applicationName,

@@ -118,9 +118,7 @@ class FakeJoinedRoom(
     }
 
     // SC start
-    override suspend fun addSpaceChild(childId: RoomId): Result<Unit> = Result.success(Unit)
-    override suspend fun removeSpaceChild(childId: RoomId): Result<Unit> = Result.success(Unit)
-    override suspend fun setIsLowPriority(isLowPriority: Boolean): Result<Unit> = Result.success(Unit)
+    override suspend fun setAvatarUrl(url: String): Result<Unit> = Result.success(Unit)
     // SC end
 
     override suspend fun typingNotice(isTyping: Boolean): Result<Unit> = simulateLongTask {

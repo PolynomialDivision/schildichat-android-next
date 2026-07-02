@@ -157,6 +157,19 @@ class FakeBaseRoom(
         return setIsFavoriteResult(isFavorite)
     }
 
+    // SC additions
+    override suspend fun addSpaceChild(childId: RoomId): Result<Unit> = Result.success(Unit)
+    override suspend fun removeSpaceChild(childId: RoomId): Result<Unit> = Result.success(Unit)
+    override suspend fun setIsLowPriority(isLowPriority: Boolean): Result<Unit> = Result.success(Unit)
+    override suspend fun forceSendSingleReadReceipt(receiptType: ReceiptType, eventId: EventId): Result<Unit> = Result.success(Unit)
+    override suspend fun sendRaw(eventType: String, content: String): Result<Unit> = Result.success(Unit)
+    override suspend fun sendRawState(eventType: String, stateKey: String, content: String): Result<String> = Result.success("")
+    override suspend fun getRawState(eventType: String, stateKey: String): Result<String?> = Result.success(null)
+    override suspend fun getRawState(eventType: String): Result<List<String>> = Result.success(emptyList())
+    override suspend fun fetchFullRoomState(): Result<List<String>> = Result.success(emptyList())
+    override suspend fun setRoomUserDisplayName(displayName: String?): Result<Unit> = Result.success(Unit)
+    // SC additions end
+
     override suspend fun markAsRead(receiptType: ReceiptType): Result<Unit> {
         return markAsReadResult(receiptType)
     }
