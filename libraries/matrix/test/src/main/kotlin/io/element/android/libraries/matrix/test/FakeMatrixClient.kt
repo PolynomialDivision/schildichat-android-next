@@ -8,6 +8,8 @@
 
 package io.element.android.libraries.matrix.test
 
+import chat.schildi.matrixsdk.ScTimelineFilterSettings
+import io.element.android.libraries.matrix.api.AccountDataRawEvent
 import io.element.android.libraries.matrix.api.HomeserverCapabilitiesProvider
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.SdkStoreSizes
@@ -164,12 +166,16 @@ class FakeMatrixClient(
 
     // SC additions
     override suspend fun getAccountData(eventType: String): String? = null
+    override suspend fun getGlobalAccountData(): Result<List<AccountDataRawEvent>> = Result.success(emptyList())
+    override suspend fun getRoomAccountData(roomId: RoomId): Result<List<AccountDataRawEvent>> = Result.success(emptyList())
     override suspend fun getRoomAccountData(roomId: RoomId, eventType: String): String? = null
-    override suspend fun setAccountData(eventType: String, content: String) {}
+    override suspend fun setAccountData(eventType: String, content: String): Result<Unit> = Result.success(Unit)
+    override suspend fun setRoomAccountData(roomId: RoomId, eventType: String, content: String): Result<Unit> = Result.success(Unit)
     override suspend fun getUrlPreviewJson(url: String): String = "{}"
+    override suspend fun shutdownClient() = Unit
     // SC additions end
 
-    override suspend fun getJoinedRoom(roomId: RoomId): JoinedRoom? {
+    override suspend fun getJoinedRoom(roomId: RoomId, scTimelineFilterSettings: ScTimelineFilterSettings): JoinedRoom? {
         return getRoomResults[roomId] as? JoinedRoom
     }
 
@@ -327,7 +333,11 @@ class FakeMatrixClient(
         resolveRoomAliasResult(roomAlias)
     }
 
-    override suspend fun getRoomPreview(roomIdOrAlias: RoomIdOrAlias, serverNames: List<String>): Result<NotJoinedRoom> = simulateLongTask {
+    override suspend fun getRoomPreview(
+        roomIdOrAlias: RoomIdOrAlias,
+        serverNames: List<String>,
+        scTimelineFilterSettings: ScTimelineFilterSettings,
+    ): Result<NotJoinedRoom> = simulateLongTask {
         getNotJoinedRoomResult(roomIdOrAlias, serverNames)
     }
 

@@ -24,8 +24,4 @@ class FakePushHandler(
     override suspend fun handleInvalid(providerInfo: String, data: String) {
         handleInvalidResult(providerInfo, data)
     }
-
-    override suspend fun scHandleReceived() {}
-    override suspend fun scHandleDeferred(providerInfo: String, pushData: PushData?) {}
-    override suspend fun scHandleLookupFailure(providerInfo: String, pushData: PushData) {}
 }

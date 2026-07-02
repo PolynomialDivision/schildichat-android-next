@@ -20,6 +20,7 @@ class FakeRoomListService(
     private val subscribeToVisibleRoomsLambda: (List<RoomId>) -> Unit = {},
     private val createRoomListLambda: (pageSize: Int) -> DynamicRoomList = { pageSize -> FakeDynamicRoomList(pageSize = pageSize) },
     override val allRooms: RoomList = createRoomListLambda(Int.MAX_VALUE),
+    override val allSpaces: RoomList = createRoomListLambda(Int.MAX_VALUE),
     private val isInitialSyncLambda: () -> Boolean = { true },
 ) : RoomListService {
     private val roomListStateFlow = MutableStateFlow<RoomListService.State>(RoomListService.State.Idle)

@@ -108,6 +108,7 @@ class FakeTimeline(
         body: String,
         htmlBody: String?,
         intentionalMentions: List<IntentionalMention>,
+        plaintext: Boolean,
     ): Result<Unit> = editMessageLambda(
         eventOrTransactionId,
         body,
@@ -127,6 +128,7 @@ class FakeTimeline(
         eventOrTransactionId: EventOrTransactionId,
         caption: String?,
         formattedCaption: String?,
+        plaintext: Boolean,
     ): Result<Unit> = editCaptionLambda(
         eventOrTransactionId,
         caption,
@@ -148,6 +150,7 @@ class FakeTimeline(
         repliedToEventId: EventId,
         body: String,
         htmlBody: String?,
+        plaintext: Boolean,
         intentionalMentions: List<IntentionalMention>,
         fromNotification: Boolean,
         msgType: MsgType,
@@ -177,6 +180,7 @@ class FakeTimeline(
         imageInfo: ImageInfo,
         caption: String?,
         formattedCaption: String?,
+        plaintext: Boolean,
         inReplyToEventId: EventId?,
     ): Result<MediaUploadHandler> = simulateLongTask {
         sendImageLambda(
@@ -206,6 +210,7 @@ class FakeTimeline(
         videoInfo: VideoInfo,
         caption: String?,
         formattedCaption: String?,
+        plaintext: Boolean,
         inReplyToEventId: EventId?,
     ): Result<MediaUploadHandler> = simulateLongTask {
         sendVideoLambda(
@@ -233,6 +238,7 @@ class FakeTimeline(
         audioInfo: AudioInfo,
         caption: String?,
         formattedCaption: String?,
+        plaintext: Boolean,
         inReplyToEventId: EventId?,
     ): Result<MediaUploadHandler> = simulateLongTask {
         sendAudioLambda(
@@ -259,6 +265,7 @@ class FakeTimeline(
         fileInfo: FileInfo,
         caption: String?,
         formattedCaption: String?,
+        plaintext: Boolean,
         inReplyToEventId: EventId?,
     ): Result<MediaUploadHandler> = simulateLongTask {
         sendFileLambda(
@@ -269,6 +276,46 @@ class FakeTimeline(
             inReplyToEventId,
         )
     }
+
+    // SC additions
+    var sendNoticeLambda: (
+        body: String,
+        htmlBody: String?,
+        intentionalMentions: List<IntentionalMention>,
+        inReplyToEventId: EventId?,
+    ) -> Result<Unit> = { _, _, _, _ ->
+        lambdaError()
+    }
+
+    override suspend fun sendNotice(
+        body: String,
+        htmlBody: String?,
+        plaintext: Boolean,
+        intentionalMentions: List<IntentionalMention>,
+        inReplyToEventId: EventId?,
+    ): Result<Unit> = sendNoticeLambda(body, htmlBody, intentionalMentions, inReplyToEventId)
+
+    var sendEmoteLambda: (
+        body: String,
+        htmlBody: String?,
+        intentionalMentions: List<IntentionalMention>,
+        inReplyToEventId: EventId?,
+    ) -> Result<Unit> = { _, _, _, _ ->
+        lambdaError()
+    }
+
+    override suspend fun sendEmote(
+        body: String,
+        htmlBody: String?,
+        plaintext: Boolean,
+        intentionalMentions: List<IntentionalMention>,
+        inReplyToEventId: EventId?,
+    ): Result<Unit> = sendEmoteLambda(body, htmlBody, intentionalMentions, inReplyToEventId)
+
+    var latestUserReceiptEventIdResult: (String) -> String? = { null }
+
+    override suspend fun latestUserReceiptEventId(userId: String): String? = latestUserReceiptEventIdResult(userId)
+    // SC additions end
 
     var sendVoiceMessageLambda: (
         file: File,
