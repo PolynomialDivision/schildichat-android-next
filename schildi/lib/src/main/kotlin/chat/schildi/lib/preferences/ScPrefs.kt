@@ -124,7 +124,7 @@ object ScPrefs {
     val VIEW_HIDDEN_EVENTS = ScBoolPref("VIEW_HIDDEN_EVENTS", false, R.string.sc_pref_view_hidden_events_title, authorsChoice = false, upstreamChoice = false)
     val VIEW_REDACTIONS = ScBoolPref("VIEW_REDACTIONS", true, R.string.sc_pref_view_redactions_title, R.string.sc_pref_view_redactions_summary, dependencies = listOf(VIEW_HIDDEN_EVENTS.toDependency(expect = false)), disabledValue = true, upstreamChoice = true)
     val VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS = ScBoolPref("VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS", false, R.string.sc_pref_view_membership_events_in_public_rooms_title, R.string.sc_pref_view_membership_events_in_public_rooms_summary, dependencies = listOf(VIEW_HIDDEN_EVENTS.toDependency(expect = false)), disabledValue = true, upstreamChoice = false, authorsChoice = true)
-    val LEGACY_MESSAGE_RENDERING = ScBoolPref("LEGACY_MESSAGE_RENDERING", false, R.string.sc_pref_legacy_message_rendering_title, R.string.sc_pref_legacy_message_rendering_summary, authorsChoice = false, upstreamChoice = true)
+    val LEGACY_MESSAGE_RENDERING = ScBoolPref("LEGACY_MESSAGE_RENDERING", false, R.string.sc_pref_legacy_message_rendering_title, R.string.sc_pref_legacy_message_rendering_summary, authorsChoice = false, upstreamChoice = true, dependencies = SC_DANGER_ZONE.asDependencies())
     val VERBOSE_CONVERSATION_ICONS = ScBoolPref("VERBOSE_CONVERSATION_ICONS", false, R.string.sc_pref_verbose_room_title_icons_title, R.string.sc_pref_verbose_room_title_icons_summary, authorsChoice = false, upstreamChoice = true)
 
     // Advanced theming options - Light theme
@@ -210,14 +210,15 @@ object ScPrefs {
         )),
         ScPrefScreen(R.string.sc_pref_category_timeline, null, listOf(
             SC_TIMELINE_LAYOUT,
-            VIEW_REDACTIONS,
-            VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS,
             //RENDER_INLINE_IMAGES,
             FLOATING_DATE,
             HIDE_CALL_TOOLBAR_ACTION,
             VERBOSE_CONVERSATION_ICONS,
             REPLY_PREVIEW_LINE_COUNT,
-            LEGACY_MESSAGE_RENDERING,
+            ScPrefCategory(R.string.sc_pref_category_timeline_event_visibility, null, listOf(
+                VIEW_REDACTIONS,
+                VIEW_MEMBERSHIP_EVENTS_IN_PUBLIC_ROOMS,
+            )),
             ScPrefCategory(R.string.sc_url_previews_title, null, listOf(
                 URL_PREVIEWS,
                 URL_PREVIEWS_IN_E2EE_ROOMS,
@@ -266,6 +267,7 @@ object ScPrefs {
             SC_DANGER_ZONE,
             ScPrefScreen(R.string.sc_pref_chamber_of_secrets_title, null, listOf(
                 ScDisclaimerPref("SC_CHAMBER_OF_SECRETS_DISCLAIMER", R.string.sc_pref_chamber_of_secrets_summary),
+                LEGACY_MESSAGE_RENDERING,
                 EL_THEME,
                 CLIENT_GENERATED_UNREAD_COUNTS,
             ), dependencies = SC_DANGER_ZONE.asDependencies()),
