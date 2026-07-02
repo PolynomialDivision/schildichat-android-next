@@ -35,10 +35,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import chat.schildi.theme.ScTheme
+import chat.schildi.theme.extensions.scOrElse
 import coil3.compose.AsyncImage
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.R
+import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.aTimelineRoomInfo
@@ -84,6 +87,7 @@ fun TimelineItemMediaGroupRow(
     onTileClick: (TimelineItem.Event) -> Unit,
     onTileLongClick: (TimelineItem.Event) -> Unit,
     onReadReceiptClick: (TimelineItem.Event) -> Unit,
+    eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val firstEvent = timelineItem.events.first()
@@ -136,6 +140,7 @@ fun TimelineItemMediaGroupRow(
                     events = timelineItem.events,
                     onTileClick = onTileClick,
                     onTileLongClick = onTileLongClick,
+                    eventSink = eventSink,
                 )
             }
         }
@@ -175,9 +180,14 @@ private fun MediaGroupCollage(
     events: List<TimelineItem.Event>,
     onTileClick: (TimelineItem.Event) -> Unit,
     onTileLongClick: (TimelineItem.Event) -> Unit,
+    eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val total = events.size
+    // In every layout below (2, 3, or a 2x2+overlay grid), the last event is always the tile in the
+    // bottom-right corner, so the whole collage's bottom-end corner is also that tile's bottom-end
+    // corner - the timestamp overlay can simply be anchored to the outer Box, matching the Telegram
+    // convention of showing the timestamp on the album's last/bottom-right item.
     Box(
         modifier = modifier
             .height(MEDIA_GROUP_HEIGHT)
@@ -251,6 +261,26 @@ private fun MediaGroupCollage(
                 }
             }
         }
+        TimelineEventTimestampView(
+            event = events.last(),
+            eventSink = eventSink,
+            modifier = Modifier
+                .scOrElse(
+                    forSc = Modifier
+                        .background(
+                            ScTheme.exposures.timestampOverlayBg,
+                            RoundedCornerShape(ScTheme.exposures.timestampRadius, 0.dp, ScTheme.exposures.bubbleRadius, 0.dp)
+                        )
+                ) {
+                    this
+                        // Outer padding
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                        .background(ElementTheme.colors.bgSubtleSecondary, RoundedCornerShape(10.0.dp))
+                }
+                .align(Alignment.BottomEnd)
+                // Inner padding
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+        )
     }
 }
 
@@ -350,6 +380,7 @@ internal fun TimelineItemMediaGroupRowTwoItemsPreview() = ElementPreview {
         onTileClick = {},
         onTileLongClick = {},
         onReadReceiptClick = {},
+        eventSink = {},
     )
 }
 
@@ -364,6 +395,7 @@ internal fun TimelineItemMediaGroupRowThreeItemsPreview() = ElementPreview {
         onTileClick = {},
         onTileLongClick = {},
         onReadReceiptClick = {},
+        eventSink = {},
     )
 }
 
@@ -378,6 +410,7 @@ internal fun TimelineItemMediaGroupRowFourItemsPreview() = ElementPreview {
         onTileClick = {},
         onTileLongClick = {},
         onReadReceiptClick = {},
+        eventSink = {},
     )
 }
 
@@ -392,5 +425,6 @@ internal fun TimelineItemMediaGroupRowMoreOverlayPreview() = ElementPreview {
         onTileClick = {},
         onTileLongClick = {},
         onReadReceiptClick = {},
+        eventSink = {},
     )
 }

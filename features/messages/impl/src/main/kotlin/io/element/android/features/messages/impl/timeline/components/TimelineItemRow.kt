@@ -223,6 +223,7 @@ internal fun TimelineItemRow(
                     onTileClick = onContentClick,
                     onTileLongClick = onLongClick,
                     onReadReceiptClick = onReadReceiptClick,
+                    eventSink = eventSink,
                 )
             }
         }
