@@ -314,7 +314,7 @@ class DefaultNotificationCreatorTest {
         var requestedNoisy: Boolean? = null
         val sut = createNotificationCreator(
             roomNotificationChannelManager = FakeRoomNotificationChannelManager(
-                getChannelIdForRoomLambda = { _, roomId, roomDisplayName, noisy ->
+                getChannelIdForRoomLambda = { _, roomId, roomDisplayName, _, noisy ->
                     requestedRoomId = roomId
                     requestedRoomDisplayName = roomDisplayName
                     requestedNoisy = noisy
@@ -351,7 +351,7 @@ class DefaultNotificationCreatorTest {
     fun `test createMessagesListNotification hides the message body when preview is disabled`() = runTest {
         val sut = createNotificationCreator(
             roomNotificationChannelManager = FakeRoomNotificationChannelManager(
-                getChannelIdForRoomLambda = { sessionId, _, _, noisy ->
+                getChannelIdForRoomLambda = { sessionId, _, _, _, noisy ->
                     createNotificationChannels().getChannelIdForMessage(sessionId, noisy)
                 },
                 shouldShowMessagePreviewLambda = { _, _ -> false },
@@ -403,7 +403,7 @@ fun createNotificationCreator(
     enterpriseService: EnterpriseService = FakeEnterpriseService(),
     notificationChannels: NotificationChannels = createNotificationChannels(enterpriseService),
     roomNotificationChannelManager: RoomNotificationChannelManager = FakeRoomNotificationChannelManager(
-        getChannelIdForRoomLambda = { sessionId, _, _, noisy -> notificationChannels.getChannelIdForMessage(sessionId, noisy) },
+        getChannelIdForRoomLambda = { sessionId, _, _, _, noisy -> notificationChannels.getChannelIdForMessage(sessionId, noisy) },
         shouldShowMessagePreviewLambda = { _, _ -> true },
     ),
     bitmapLoader: NotificationBitmapLoader = DefaultNotificationBitmapLoader(

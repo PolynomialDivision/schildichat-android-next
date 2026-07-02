@@ -29,9 +29,11 @@ interface RoomNotificationChannelManager {
     /**
      * Returns the channel id to notify on for [roomId]: its customized channel if the room has
      * one, otherwise its ordinary channel if [noisy] (creating it on first use), otherwise the
-     * app's shared channel (same as [NotificationChannels.getChannelIdForMessage]).
+     * app's shared channel (same as [NotificationChannels.getChannelIdForMessage]). Any channel
+     * created here is filed under the "Private chats" or "Rooms" system channel group depending
+     * on [isDm], so it doesn't fall into Android's generic "Other" bucket for ungrouped channels.
      */
-    suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, noisy: Boolean): String
+    suspend fun getChannelIdForRoom(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean, noisy: Boolean): String
 
     /** Whether notification bodies for [roomId] should show the message text, or a placeholder. */
     suspend fun shouldShowMessagePreview(sessionId: SessionId, roomId: RoomId): Boolean
@@ -44,7 +46,7 @@ interface RoomNotificationChannelManager {
      * channel is (re)created under the new persisted version and any stale prior-version channel
      * is removed. No-op if the room has no custom settings (e.g. they were just cleared).
      */
-    suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String)
+    suspend fun onRoomNotificationSettingsChanged(sessionId: SessionId, roomId: RoomId, roomDisplayName: String, isDm: Boolean)
 
     /** Deletes channels for rooms no longer in [roomIds] (left via another device/client, etc). */
     suspend fun pruneChannelsForSession(sessionId: SessionId, roomIds: Set<RoomId>)

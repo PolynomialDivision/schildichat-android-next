@@ -17,6 +17,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationChannelGroupCompat
 import androidx.core.app.NotificationManagerCompat
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
@@ -38,10 +39,20 @@ import kotlinx.coroutines.withContext
 /* ==========================================================================================
  * IDs for channels
  * ========================================================================================== */
-internal const val SILENT_NOTIFICATION_CHANNEL_ID = "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V2"
-internal const val NOISY_NOTIFICATION_CHANNEL_ID_BASE = "DEFAULT_NOISY_NOTIFICATION_CHANNEL_ID_V2"
-internal const val CALL_NOTIFICATION_CHANNEL_ID = "CALL_NOTIFICATION_CHANNEL_ID_V3"
-internal const val RINGING_CALL_NOTIFICATION_CHANNEL_ID_BASE = "RINGING_CALL_NOTIFICATION_CHANNEL_ID"
+// Bumped from _V2/_V3/(unsuffixed) to _V3/_V4/_V2 respectively: NotificationChannel.setGroup()
+// can only be set at creation, so assigning these to a channel group requires a fresh id -
+// see the "Migration - remove ungrouped channels" cleanup below.
+internal const val SILENT_NOTIFICATION_CHANNEL_ID = "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V3"
+internal const val NOISY_NOTIFICATION_CHANNEL_ID_BASE = "DEFAULT_NOISY_NOTIFICATION_CHANNEL_ID_V3"
+internal const val CALL_NOTIFICATION_CHANNEL_ID = "CALL_NOTIFICATION_CHANNEL_ID_V4"
+internal const val RINGING_CALL_NOTIFICATION_CHANNEL_ID_BASE = "RINGING_CALL_NOTIFICATION_CHANNEL_ID_V2"
+
+/* ==========================================================================================
+ * IDs for channel groups
+ * ========================================================================================== */
+internal const val PRIVATE_CHATS_CHANNEL_GROUP_ID = "private_chats"
+internal const val ROOMS_CHANNEL_GROUP_ID = "rooms"
+internal const val OTHER_CHANNEL_GROUP_ID = "other"
 
 internal fun versionedChannelId(base: String, version: Int): String =
     if (version <= 0) base else "${base}_v$version"
@@ -105,12 +116,38 @@ class DefaultNotificationChannels(
     }
 
     /**
+     * Creates the 3 channel groups Settings organizes every channel under, so nothing falls into
+     * Android's generic "Other" catch-all for ungrouped channels: "Private chats" (DM rooms),
+     * "Rooms" (everything else Matrix-side, including per-room channels), and this app's own
+     * "Other" (calls, background service, sync/failure - non-conversation, technical channels).
+     * Deliberately not called "Conversations", to avoid confusion with Android's own Conversation /
+     * Priority Conversation feature. Idempotent: creating a group that already exists is a no-op.
+     */
+    private fun ensureChannelGroups() {
+        notificationManager.createNotificationChannelGroupsCompat(
+            listOf(
+                NotificationChannelGroupCompat.Builder(PRIVATE_CHATS_CHANNEL_GROUP_ID)
+                    .setName(stringProvider.getString(R.string.notification_channel_group_private_chats).ifEmpty { "Private chats" })
+                    .build(),
+                NotificationChannelGroupCompat.Builder(ROOMS_CHANNEL_GROUP_ID)
+                    .setName(stringProvider.getString(R.string.notification_channel_group_rooms).ifEmpty { "Rooms" })
+                    .build(),
+                NotificationChannelGroupCompat.Builder(OTHER_CHANNEL_GROUP_ID)
+                    .setName(stringProvider.getString(R.string.notification_channel_group_other).ifEmpty { "Other" })
+                    .build(),
+            )
+        )
+    }
+
+    /**
      * Create notification channels.
      */
     private fun createNotificationChannels() {
         if (!supportNotificationChannels()) {
             return
         }
+
+        ensureChannelGroups()
 
         val accentColor = NotificationConfig.NOTIFICATION_ACCENT_COLOR
 
@@ -150,6 +187,10 @@ class DefaultNotificationChannels(
             "CALL_NOTIFICATION_CHANNEL_ID",
             "CALL_NOTIFICATION_CHANNEL_ID_V2",
             "LISTEN_FOR_EVENTS_NOTIFICATION_CHANNEL_ID",
+            // Superseded by the *_V3/_V4 ids above, which are channel-group-assigned from
+            // creation: NotificationChannel.setGroup() can't be applied to an existing channel.
+            "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V2",
+            "CALL_NOTIFICATION_CHANNEL_ID_V3",
         )) {
             notificationManager.getNotificationChannel(channelId)?.let {
                 notificationManager.deleteNotificationChannel(channelId)
@@ -158,6 +199,10 @@ class DefaultNotificationChannels(
         // Drop older versioned channels; only the current one remains.
         deleteStaleVersionedChannels(NOISY_NOTIFICATION_CHANNEL_ID_BASE, currentNoisyChannelId)
         deleteStaleVersionedChannels(RINGING_CALL_NOTIFICATION_CHANNEL_ID_BASE, currentRingingCallChannelId)
+        // Same reasoning as above: the old, ungrouped noisy/ringing-call channel families
+        // (including any of their own versioned variants) are gone for good.
+        deleteStaleVersionedChannels("DEFAULT_NOISY_NOTIFICATION_CHANNEL_ID_V2", currentId = "")
+        deleteStaleVersionedChannels("RINGING_CALL_NOTIFICATION_CHANNEL_ID", currentId = "")
 
         // Default notification importance: shows everywhere, makes noise, but does not visually intrude.
         val noisySoundUri = context.resolveNoisySoundUri(config.messageSound)
@@ -181,6 +226,7 @@ class DefaultNotificationChannels(
                 .setSound(null, null)
                 .setLightsEnabled(true)
                 .setLightColor(accentColor)
+                .setGroup(OTHER_CHANNEL_GROUP_ID)
                 .build()
         )
 
@@ -195,6 +241,7 @@ class DefaultNotificationChannels(
                 .setVibrationEnabled(true)
                 .setLightsEnabled(true)
                 .setLightColor(accentColor)
+                .setGroup(OTHER_CHANNEL_GROUP_ID)
                 .build()
         )
 
@@ -220,6 +267,7 @@ class DefaultNotificationChannels(
             .setVibrationEnabled(true)
             .setLightsEnabled(true)
             .setLightColor(accentColor)
+            .setGroup(OTHER_CHANNEL_GROUP_ID)
         if (soundUri != null) {
             builder.setSound(
                 soundUri,
@@ -241,6 +289,7 @@ class DefaultNotificationChannels(
             .setVibrationEnabled(true)
             .setLightsEnabled(true)
             .setLightColor(accentColor)
+            .setGroup(OTHER_CHANNEL_GROUP_ID)
         if (soundUri != null) {
             builder.setSound(
                 soundUri,

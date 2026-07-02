@@ -11,6 +11,7 @@ package io.element.android.libraries.push.impl.notifications.channels
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationChannelGroupCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.google.common.truth.Truth.assertThat
@@ -45,6 +46,65 @@ class NotificationChannelsTest {
 
         verify { notificationManager.createNotificationChannel(any<NotificationChannelCompat>()) }
         verify { notificationManager.deleteNotificationChannel(any<String>()) }
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun `init - creates the three notification channel groups`() {
+        val captured = slot<List<NotificationChannelGroupCompat>>()
+        val notificationManager = mockk<NotificationManagerCompat>(relaxed = true) {
+            every { notificationChannels } returns emptyList()
+            every { createNotificationChannelGroupsCompat(capture(captured)) } returns Unit
+        }
+
+        createNotificationChannels(notificationManager = notificationManager)
+
+        assertThat(captured.captured.map { it.id }).containsExactly(
+            PRIVATE_CHATS_CHANNEL_GROUP_ID,
+            ROOMS_CHANNEL_GROUP_ID,
+            OTHER_CHANNEL_GROUP_ID,
+        )
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun `init - assigns silent, noisy and call channels to the Other group`() {
+        val captured = mutableListOf<NotificationChannelCompat>()
+        val notificationManager = mockk<NotificationManagerCompat>(relaxed = true) {
+            every { notificationChannels } returns emptyList()
+            every { createNotificationChannel(capture(captured)) } returns Unit
+        }
+
+        createNotificationChannels(notificationManager = notificationManager)
+
+        assertThat(captured).isNotEmpty()
+        assertThat(captured.all { it.group == OTHER_CHANNEL_GROUP_ID }).isTrue()
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun `init - deletes the ungrouped legacy channel ids superseded by the versioned, grouped ones`() {
+        val legacyIds = listOf(
+            "DEFAULT_SILENT_NOTIFICATION_CHANNEL_ID_V2",
+            "CALL_NOTIFICATION_CHANNEL_ID_V3",
+        )
+        val legacyChannels = legacyIds.map { legacyId ->
+            mockk<android.app.NotificationChannel>(relaxed = true) {
+                every { id } returns legacyId
+            }
+        }
+        val notificationManager = mockk<NotificationManagerCompat>(relaxed = true) {
+            every { notificationChannels } returns legacyChannels
+            legacyIds.forEach { legacyId ->
+                every { getNotificationChannel(legacyId) } returns mockk(relaxed = true)
+            }
+        }
+
+        createNotificationChannels(notificationManager = notificationManager)
+
+        legacyIds.forEach { legacyId ->
+            verify { notificationManager.deleteNotificationChannel(legacyId) }
+        }
     }
 
     @Test

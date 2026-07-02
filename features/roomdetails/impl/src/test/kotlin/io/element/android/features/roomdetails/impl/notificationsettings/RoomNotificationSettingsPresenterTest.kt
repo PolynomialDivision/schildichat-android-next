@@ -176,7 +176,7 @@ class RoomNotificationSettingsPresenterTest {
         val sessionPreferencesStore = InMemorySessionPreferencesStore()
         var recreatedRoom: Any? = null
         val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
-            onRoomNotificationSettingsChangedLambda = { sessionId, roomId, _ -> recreatedRoom = sessionId to roomId },
+            onRoomNotificationSettingsChangedLambda = { sessionId, roomId, _, _ -> recreatedRoom = sessionId to roomId },
         )
         val presenter = createRoomNotificationSettingsPresenter(
             sessionPreferencesStore = sessionPreferencesStore,
@@ -198,7 +198,7 @@ class RoomNotificationSettingsPresenterTest {
         val sessionPreferencesStore = InMemorySessionPreferencesStore()
         var channelRecreated = false
         val roomNotificationChannelManager = FakeRoomNotificationChannelManager(
-            onRoomNotificationSettingsChangedLambda = { _, _, _ -> channelRecreated = true },
+            onRoomNotificationSettingsChangedLambda = { _, _, _, _ -> channelRecreated = true },
         )
         val presenter = createRoomNotificationSettingsPresenter(
             sessionPreferencesStore = sessionPreferencesStore,
@@ -222,7 +222,7 @@ class RoomNotificationSettingsPresenterTest {
         val presenter = createRoomNotificationSettingsPresenter(
             sessionPreferencesStore = sessionPreferencesStore,
             roomNotificationChannelManager = FakeRoomNotificationChannelManager(
-                onRoomNotificationSettingsChangedLambda = { _, _, _ -> },
+                onRoomNotificationSettingsChangedLambda = { _, _, _, _ -> },
             ),
         )
         presenter.test {

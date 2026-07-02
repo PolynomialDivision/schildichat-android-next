@@ -190,14 +190,14 @@ class RoomNotificationSettingsPresenter(
                     showPriorityDialog = false
                     localCoroutineScope.launch {
                         sessionPreferencesStore.setRoomNotificationPriority(room.roomId, event.priority)
-                        roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, displayName.orEmpty())
+                        roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, displayName.orEmpty(), room.isDm())
                     }
                 }
                 RoomNotificationSettingsEvent.ShowPriorityDialog -> showPriorityDialog = true
                 RoomNotificationSettingsEvent.DismissPriorityDialog -> showPriorityDialog = false
                 is RoomNotificationSettingsEvent.SetPreviewEnabled -> localCoroutineScope.launch {
                     sessionPreferencesStore.setRoomMessagePreviewEnabled(room.roomId, event.enabled)
-                    roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, displayName.orEmpty())
+                    roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, displayName.orEmpty(), room.isDm())
                 }
                 RoomNotificationSettingsEvent.ResetChannelSettings -> localCoroutineScope.launch {
                     roomNotificationChannelManager.clearRoomChannel(room.sessionId, room.roomId)
@@ -244,7 +244,7 @@ class RoomNotificationSettingsPresenter(
             val resolved = resolvePickedSound(sound, onCopyError) ?: return@withLock
             onCopySuccess()
             sessionPreferencesStore.setRoomNotificationSoundAndIncrementVersion(room.roomId, resolved.first, resolved.second)
-            roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, roomDisplayName)
+            roomNotificationChannelManager.onRoomNotificationSettingsChanged(room.sessionId, room.roomId, roomDisplayName, room.isDm())
             // Non-Custom picks bypass the copier, so they don't sweep the prior Custom file inline.
             // Drop it now that the new channel no longer references it.
             if (resolved.first !is NotificationSound.Custom) {
