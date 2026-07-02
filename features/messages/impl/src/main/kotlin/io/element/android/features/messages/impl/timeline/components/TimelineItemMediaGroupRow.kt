@@ -116,10 +116,14 @@ fun TimelineItemMediaGroupRow(
             isMine = firstEvent.isMine,
             timelineRoomInfo = timelineRoomInfo.copy(isDm = true),
         )
+        // Incoming bubbles in non-DM rooms get an extra BUBBLE_INCOMING_OFFSET on the start edge so
+        // they align under the sender's name rather than under their avatar, matching the single-
+        // event bubble in TimelineItemEventRow.
+        val startPadding = if (!firstEvent.isMine && !timelineRoomInfo.isDm) 16.dp + BUBBLE_INCOMING_OFFSET else 16.dp
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(start = startPadding, end = 16.dp),
             contentAlignment = if (firstEvent.isMine) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
             MessageEventBubble(

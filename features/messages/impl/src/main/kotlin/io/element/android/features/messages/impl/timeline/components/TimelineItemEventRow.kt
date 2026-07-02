@@ -140,7 +140,7 @@ val NEGATIVE_MARGIN_FOR_BUBBLE = (-8).dp
 // Width of the transparent border around the sender avatar
 val SENDER_AVATAR_BORDER_WIDTH = 3.dp
 
-private val BUBBLE_INCOMING_OFFSET = 16.dp
+val BUBBLE_INCOMING_OFFSET = 16.dp
 
 @Composable
 fun TimelineItemEventRow(
