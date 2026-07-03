@@ -9,6 +9,7 @@ import io.element.android.features.home.impl.datasource.PAGINATION_THRESHOLD
 import io.element.android.features.home.impl.datasource.RoomListDataSource
 import io.element.android.features.home.impl.datasource.SUBSCRIBE_TO_VISIBLE_ROOMS_DEBOUNCE_IN_MILLIS
 import io.element.android.features.home.impl.model.RoomListRoomSummary
+import io.element.android.features.invite.api.SeenInvitesStore
 import io.element.android.libraries.core.coroutine.childScope
 import io.element.android.libraries.matrix.api.roomlist.DynamicRoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomList
@@ -45,6 +46,7 @@ import timber.log.Timber
 class ScRoomListDataSource(
     private val scPreferencesStore: ScPreferencesStore,
     private val roomListDataSource: RoomListDataSource,
+    private val seenInvitesStore: SeenInvitesStore,
 ) {
     private val tag = "ScRoomsSource"
 
@@ -131,9 +133,12 @@ class ScRoomListDataSource(
                     _selectedSpaceItem,
                     roomListDataSource.roomSummariesFlow,
                     scPreferencesStore.settingFlow(ScPrefs.PSEUDO_SPACE_ALL_ROOMS),
-                ) { selectedSpace, allRoomsValue, allowAllRooms ->
+                    seenInvitesStore.seenRoomIds(),
+                ) { selectedSpace, allRoomsValue, allowAllRooms, seenRoomInvites ->
                     // Do the actual filtering
-                    selectedSpace?.applyFilter(allRoomsValue) ?: allRoomsValue.takeIf { allowAllRooms } ?: persistentListOf()
+                    selectedSpace?.applyFilter(allRoomsValue, seenRoomInvites)
+                        ?: allRoomsValue.takeIf { allowAllRooms }
+                        ?: persistentListOf()
                 }
                     .onEach {
                         _roomSummariesFlow.emit(it)

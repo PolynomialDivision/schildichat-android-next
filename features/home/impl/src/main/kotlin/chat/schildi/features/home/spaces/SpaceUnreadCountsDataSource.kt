@@ -3,9 +3,12 @@ package chat.schildi.features.home.spaces
 import androidx.compose.runtime.Immutable
 import chat.schildi.lib.preferences.ScPreferencesStore
 import chat.schildi.lib.preferences.ScPrefs
+import chat.schildi.lib.preferences.safeLookup
 import dev.zacsweers.metro.Inject
 import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.features.home.impl.model.RoomSummaryDisplayType
+import io.element.android.features.invite.api.SeenInvitesStore
+import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.roomlist.RoomListService
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.onEach
 class SpaceUnreadCountsDataSource(
     private val scPreferencesStore: ScPreferencesStore,
     private val roomListService: RoomListService,
+    private val seenInvitesStore: SeenInvitesStore,
 ) {
 
     private val _enrichedSpaces = MutableStateFlow<ImmutableList<SpaceListDataSource.AbstractSpaceHierarchyItem>?>(null)
@@ -40,9 +44,14 @@ class SpaceUnreadCountsDataSource(
             scRoomListDataSource.unfilteredRoomSummariesFlow.throttleLatest(300),
             spaceListDataSource.allSpaces,
             scRoomListDataSource.spaceSelectionHierarchy,
-            scPreferencesStore.settingFlow(ScPrefs.CLIENT_GENERATED_UNREAD_COUNTS),
-            scPreferencesStore.settingFlow(ScPrefs.SPACE_NAV),
-        ) { allRoomsValue, rootSpaces, spaceSelectionValue, useClientGeneratedCounts, spaceNavEnabled ->
+            scPreferencesStore.combinedSettingFlow { lookup ->
+                Pair(
+                    ScPrefs.CLIENT_GENERATED_UNREAD_COUNTS.safeLookup(lookup),
+                    ScPrefs.SPACE_NAV.safeLookup(lookup),
+                )
+            },
+            seenInvitesStore.seenRoomIds(),
+        ) { allRoomsValue, rootSpaces, spaceSelectionValue, (useClientGeneratedCounts, spaceNavEnabled), seenRoomInvites ->
             if (!spaceNavEnabled || rootSpaces == null || spaceSelectionValue == null) {
                 return@combine Triple(SpaceUnreadCounts(), null, emptyList())
             }
@@ -58,11 +67,11 @@ class SpaceUnreadCountsDataSource(
                 val siblings = (parent as? SpaceListDataSource.SpaceHierarchyItem)?.spaces.orEmpty()
                 rootSpaces + siblings + children + parent?.let { if (rootSpaces.contains(parent)) emptyList() else listOf(it) }.orEmpty()
             }
-            val totalUnreadCount = getAggregatedUnreadCounts(allRoomsValue, useClientGeneratedCounts)
+            val totalUnreadCount = getAggregatedUnreadCounts(allRoomsValue, useClientGeneratedCounts, seenRoomInvites)
             val visibleSpaceIds = visibleSpaces.mapNotNull { (it as? SpaceListDataSource.SpaceHierarchyItem)?.info?.roomId }
             val newEnrichedSpaces = rootSpaces.map { space ->
                 space.enrich {
-                    if (it in visibleSpaces) getUnreadCountsForSpace(it, allRoomsValue, useClientGeneratedCounts) else null
+                    if (it in visibleSpaces) getUnreadCountsForSpace(it, allRoomsValue, useClientGeneratedCounts, seenRoomInvites) else null
                 }
             }.toImmutableList()
             //visibleSpaces.forEach { result[it.selectionId] = getUnreadCountsForSpace(it, allRoomsValue, useClientGeneratedCounts) }
@@ -78,12 +87,18 @@ class SpaceUnreadCountsDataSource(
         space: SpaceListDataSource.AbstractSpaceHierarchyItem,
         allRooms: List<RoomListRoomSummary>,
         useClientGeneratedUnreadCounts: Boolean,
+        seenRoomInvites: Set<RoomId>,
     ) = getAggregatedUnreadCounts(
-        space.applyFilter(allRooms),
+        space.applyFilter(allRooms, seenRoomInvites),
         useClientGeneratedUnreadCounts,
+        seenRoomInvites,
     )
 
-    private fun getAggregatedUnreadCounts(rooms: List<RoomListRoomSummary>, useClientGeneratedUnreadCounts: Boolean): SpaceUnreadCounts {
+    private fun getAggregatedUnreadCounts(
+        rooms: List<RoomListRoomSummary>,
+        useClientGeneratedUnreadCounts: Boolean,
+        seenRoomInvites: Set<RoomId>,
+    ): SpaceUnreadCounts {
         var unread = SpaceUnreadCounts()
         for (room in rooms) {
             unread = unread.add(
@@ -92,6 +107,7 @@ class SpaceUnreadCountsDataSource(
                 if (useClientGeneratedUnreadCounts) room.numberOfUnreadMessages else room.unreadCount,
                 room.isMarkedUnread,
                 room.displayType == RoomSummaryDisplayType.INVITE,
+                room.roomId in seenRoomInvites,
             )
         }
         return unread
@@ -102,12 +118,13 @@ class SpaceUnreadCountsDataSource(
         notifications: Long,
         unread: Long,
         markedUnread: Boolean,
-        isInvite: Boolean
+        isInvite: Boolean,
+        isSeenInvite: Boolean,
     ): SpaceUnreadCounts = if (isInvite) {
         copy(
-            notifiedMessages = this.notifiedMessages + 1,
+            notifiedMessages = this.notifiedMessages + if (isSeenInvite) 0 else 1,
             unreadMessages = this.unreadMessages + 1,
-            notifiedChats = this.notifiedChats + 1,
+            notifiedChats = this.notifiedChats + if (isSeenInvite) 0 else 1,
             unreadChats = this.unreadChats + 1,
             inviteCount = this.inviteCount + 1,
         )
